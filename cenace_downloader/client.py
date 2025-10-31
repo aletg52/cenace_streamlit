@@ -1,0 +1,355 @@
+"""
+CENACE API Client
+=================
+Handles HTTP calls to CENACE's web service with retries, caching, and automatic chunking
+"""
+
+import requests
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
+import time
+import hashlib
+import json
+from pathlib import Path
+from typing import List, Dict, Optional, Callable
+import logging
+from functools import lru_cache
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Cache directory
+CACHE_DIR = Path.home() / ".cenace_cache"
+CACHE_DIR.mkdir(exist_ok=True)
+
+
+class CENACEClient:
+    """
+    Client for interacting with CENACE's web service
+    
+    Features:
+    - Automatic 7-day window chunking
+    - 10-zone batch processing
+    - Smart caching with 24-hour expiration
+    - Configurable retry logic
+    - Progress tracking
+    """
+    
+    BASE_URL = "https://ws01.cenace.gob.mx:8082/SWCAEZC/SIM"
+    MAX_DAYS_PER_REQUEST = 7
+    MAX_ZONES_PER_REQUEST = 10
+    CACHE_DURATION_HOURS = 24
+    
+    def __init__(self, verify_ssl=False, retry_attempts=3, delay=1.0, cache_enabled=True):
+        """
+        Initialize the CENACE client
+        
+        Parameters:
+        -----------
+        verify_ssl : bool
+            Whether to verify SSL certificates
+        retry_attempts : int
+            Number of retry attempts for failed requests
+        delay : float
+            Delay between requests in seconds
+        cache_enabled : bool
+            Whether to use caching
+        """
+        self.verify_ssl = verify_ssl
+        self.retry_attempts = retry_attempts
+        self.delay = delay
+        self.cache_enabled = cache_enabled
+        self.session = requests.Session()
+        
+        # Disable SSL warnings if not verifying
+        if not verify_ssl:
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    def _get_cache_key(self, system: str, zones: List[str], start_date: datetime.date, 
+                      end_date: datetime.date, process: str) -> str:
+        """Generate a unique cache key for the request"""
+        zones_str = ",".join(sorted(zones))
+        key_str = f"{system}_{process}_{zones_str}_{start_date}_{end_date}"
+        return hashlib.md5(key_str.encode()).hexdigest()
+    
+    def _get_cached_data(self, cache_key: str) -> Optional[Dict]:
+        """Retrieve cached data if available and not expired"""
+        if not self.cache_enabled:
+            return None
+        
+        cache_file = CACHE_DIR / f"{cache_key}.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    cached = json.load(f)
+                
+                # Check if cache is expired (24 hours)
+                cached_time = datetime.fromisoformat(cached['timestamp'])
+                if datetime.now() - cached_time < timedelta(hours=self.CACHE_DURATION_HOURS):
+                    logger.info(f"Using cached data for key: {cache_key}")
+                    return cached['data']
+                else:
+                    logger.info(f"Cache expired for key: {cache_key}")
+                    cache_file.unlink()  # Delete expired cache
+            except Exception as e:
+                logger.warning(f"Error reading cache: {e}")
+        
+        return None
+    
+    def _save_cache(self, cache_key: str, data: Dict):
+        """Save data to cache"""
+        if not self.cache_enabled:
+            return
+        
+        cache_file = CACHE_DIR / f"{cache_key}.json"
+        try:
+            cached_data = {
+                'timestamp': datetime.now().isoformat(),
+                'data': data
+            }
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cached_data, f)
+            logger.info(f"Saved cache for key: {cache_key}")
+        except Exception as e:
+            logger.warning(f"Error saving cache: {e}")
+    
+    def _format_date(self, date: datetime.date) -> str:
+        """Format date for URL"""
+        return f"{date.year}/{date.month:02d}/{date.day:02d}"
+    
+    def _build_url(self, system: str, zones: List[str], start_date: datetime.date,
+                   end_date: datetime.date, process: str) -> str:
+        """Build the service URL"""
+        # Convert zone names with spaces to dashes for URL
+        zones_str = ",".join(z.strip().replace(" ", "-") for z in zones)
+        
+        url_parts = [self.BASE_URL, system, process]
+        
+        if zones_str:
+            url_parts.append(zones_str)
+        
+        url_parts.extend([
+            self._format_date(start_date),
+            self._format_date(end_date)
+        ])
+        
+        return "/".join(url_parts)
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, ConnectionError))
+    )
+    def _make_request(self, url: str) -> str:
+        """Make HTTP request with retry logic"""
+        logger.info(f"Making request to: {url}")
+        
+        response = self.session.get(url, verify=self.verify_ssl, timeout=30)
+        response.raise_for_status()
+        
+        # Check if we got valid XML
+        if not response.text or response.text.startswith('<!DOCTYPE'):
+            raise ValueError("Invalid response from server")
+        
+        return response.text
+    
+    def _parse_xml_response(self, xml_content: str) -> List[Dict]:
+        """Parse XML response from CENACE"""
+        try:
+            # Clean the XML content
+            xml_content = xml_content.strip()
+            if xml_content.startswith('<?xml'):
+                xml_content = xml_content.split('>', 1)[1]
+            
+            # Parse XML
+            root = ET.fromstring(f'<root>{xml_content}</root>')
+            
+            data = []
+            for zona in root.findall('.//Zona'):
+                zona_carga = zona.get('zona_carga', '').strip()
+                
+                for valores in zona.findall('.//Valores'):
+                    for dato in valores.findall('valores'):
+                        try:
+                            record = {
+                                'zona_carga': zona_carga,
+                                'fecha': dato.get('fecha'),
+                                'hora': int(dato.get('hora', 0)),
+                                'demanda': float(dato.get('total_cargas', 0))
+                            }
+                            data.append(record)
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error parsing record: {e}")
+                            continue
+            
+            return data
+            
+        except ET.ParseError as e:
+            logger.error(f"XML parsing error: {e}")
+            # Try alternative parsing for different XML structure
+            return self._parse_alternative_xml(xml_content)
+    
+    def _parse_alternative_xml(self, xml_content: str) -> List[Dict]:
+        """Alternative XML parsing for different response structures"""
+        try:
+            # Handle case where response might have different structure
+            root = ET.fromstring(xml_content)
+            
+            data = []
+            # Look for different possible node names
+            for node in root.iter():
+                if 'zona_carga' in node.attrib or 'zona' in node.attrib:
+                    zona_carga = node.get('zona_carga', node.get('zona', '')).strip()
+                    fecha = node.get('fecha', '')
+                    hora = node.get('hora', node.get('hour', '1'))
+                    demanda = node.get('total_cargas', node.get('demanda', '0'))
+                    
+                    if fecha and demanda:
+                        try:
+                            record = {
+                                'zona_carga': zona_carga,
+                                'fecha': fecha,
+                                'hora': int(hora),
+                                'demanda': float(demanda)
+                            }
+                            data.append(record)
+                        except (ValueError, TypeError):
+                            continue
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Alternative XML parsing failed: {e}")
+            return []
+    
+    def _download_chunk(self, system: str, zones: List[str], start_date: datetime.date,
+                       end_date: datetime.date, process: str) -> List[Dict]:
+        """Download a single chunk of data (max 7 days, max 10 zones)"""
+        # Check cache first
+        cache_key = self._get_cache_key(system, zones, start_date, end_date, process)
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data:
+            return cached_data
+        
+        # Build URL and make request
+        url = self._build_url(system, zones, start_date, end_date, process)
+        
+        try:
+            xml_content = self._make_request(url)
+            data = self._parse_xml_response(xml_content)
+            
+            # Add system info to each record
+            for record in data:
+                record['sistema'] = system
+            
+            # Save to cache
+            self._save_cache(cache_key, data)
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error downloading chunk: {e}")
+            return []
+    
+    def download_data(self, system: str, zones: List[str], start_date: datetime.date,
+                     end_date: datetime.date, process: str = "MDA",
+                     progress_callback: Optional[Callable] = None) -> List[Dict]:
+        """
+        Download data with automatic chunking for API limits
+        
+        Parameters:
+        -----------
+        system : str
+            Electric system (SIN, BCA, BCS)
+        zones : List[str]
+            List of load zones
+        start_date : datetime.date
+            Start date
+        end_date : datetime.date
+            End date
+        process : str
+            Process type (MDA)
+        progress_callback : Callable
+            Optional callback for progress updates (current, total, message)
+        
+        Returns:
+        --------
+        List[Dict] : Combined data from all chunks
+        """
+        all_data = []
+        
+        # Calculate total operations for progress
+        zone_batches = [zones[i:i+self.MAX_ZONES_PER_REQUEST] 
+                       for i in range(0, len(zones), self.MAX_ZONES_PER_REQUEST)]
+        
+        current_date = start_date
+        total_operations = 0
+        
+        # Calculate total operations
+        while current_date <= end_date:
+            chunk_end = min(current_date + timedelta(days=self.MAX_DAYS_PER_REQUEST - 1), end_date)
+            total_operations += len(zone_batches)
+            current_date = chunk_end + timedelta(days=1)
+        
+        # Reset current_date for actual download
+        current_date = start_date
+        current_operation = 0
+        
+        # Download data in 7-day chunks
+        while current_date <= end_date:
+            chunk_end = min(current_date + timedelta(days=self.MAX_DAYS_PER_REQUEST - 1), end_date)
+            
+            # Process each batch of zones
+            for batch_idx, zone_batch in enumerate(zone_batches):
+                if progress_callback:
+                    progress_callback(
+                        current_operation, 
+                        total_operations,
+                        f"Downloading {system}: {current_date} to {chunk_end}, "
+                        f"Zones batch {batch_idx + 1}/{len(zone_batches)}"
+                    )
+                
+                # Download chunk
+                chunk_data = self._download_chunk(
+                    system, zone_batch, current_date, chunk_end, process
+                )
+                
+                if chunk_data:
+                    all_data.extend(chunk_data)
+                
+                # Delay between requests
+                if self.delay > 0:
+                    time.sleep(self.delay)
+                
+                current_operation += 1
+            
+            current_date = chunk_end + timedelta(days=1)
+        
+        logger.info(f"Downloaded {len(all_data)} records for {system}")
+        return all_data
+    
+    def clear_cache(self):
+        """Clear all cached data"""
+        cache_files = list(CACHE_DIR.glob("*.json"))
+        for cache_file in cache_files:
+            try:
+                cache_file.unlink()
+            except Exception as e:
+                logger.warning(f"Error deleting cache file {cache_file}: {e}")
+        
+        logger.info(f"Cleared {len(cache_files)} cache files")
+    
+    def get_cache_info(self) -> Dict:
+        """Get information about current cache"""
+        cache_files = list(CACHE_DIR.glob("*.json"))
+        total_size = sum(f.stat().st_size for f in cache_files)
+        
+        return {
+            'cache_dir': str(CACHE_DIR),
+            'num_files': len(cache_files),
+            'total_size_mb': round(total_size / 1024 / 1024, 2),
+            'cache_enabled': self.cache_enabled
+        }
