@@ -232,26 +232,6 @@ with st.sidebar:
     )
 
 # Main content area
-# Create a placeholder for success message that can be updated
-success_placeholder = st.empty()
-
-# Show success message if download just completed
-if st.session_state.download_complete and st.session_state.download_data is not None:
-    df_check = st.session_state.download_data
-    if not df_check.empty and 'fecha' in df_check.columns and 'zona_carga' in df_check.columns:
-        with success_placeholder.container():
-            st.success(f"""
-            ✅ **Download Complete!**
-            - Records: {len(df_check):,}
-            - Zones: {len(df_check['zona_carga'].unique())}
-            - Date Range: {df_check['fecha'].min().date()} to {df_check['fecha'].max().date()}
-            """)
-            st.balloons()
-            
-            # The rerun from download should have already updated the tabs
-            # But if user still doesn't see data, they can refresh manually
-            st.caption("💡 If data doesn't appear, try clicking 'Filter by System' in the sidebar to refresh")
-
 main_container = st.container()
 
 with main_container:
@@ -707,11 +687,24 @@ if download_button:
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Set flag for rerun at top of script (more reliable than calling rerun here)
-            st.session_state.pending_rerun = True
-            
-            # Also try immediate rerun as backup
-            st.rerun()
+            # Show download complete message
+            if not final_df.empty and 'fecha' in final_df.columns and 'zona_carga' in final_df.columns:
+                st.success(f"""
+                ✅ **Download Complete!**
+                - Records: {len(final_df):,}
+                - Zones: {len(final_df['zona_carga'].unique())}
+                - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
+                
+                Navigate to the **Dashboard** or **Downloads** tab to access your data.
+                """)
+                st.balloons()
+                
+                # Force rerun immediately after showing success message
+                # This ensures tabs refresh with new data
+                st.session_state.pending_rerun = True
+                st.rerun()
+            else:
+                st.warning("⚠️ Download completed but no valid data was returned.")
             
         except Exception as e:
             st.error(f"""
