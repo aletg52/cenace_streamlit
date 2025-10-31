@@ -230,7 +230,8 @@ with main_container:
     
     with tab1:
         # Dashboard Tab
-        if st.session_state.download_data is None:
+        df = st.session_state.download_data
+        if df is None or df.empty:
             # Show instructions when no data
             st.markdown("""
             ### 👋 Welcome to CENACE Demand Downloader
@@ -267,63 +268,66 @@ with main_container:
             
         else:
             # Show data dashboard
-            df = st.session_state.download_data
-            
-            st.subheader("📊 Data Overview")
-            
-            # Key metrics
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("Total Records", f"{len(df):,}")
-            with col2:
-                st.metric("Date Range", f"{df['fecha'].min().date()} to {df['fecha'].max().date()}")
-            with col3:
-                st.metric("Zones", len(df['zona_carga'].unique()))
-            with col4:
-                st.metric("Systems", len(df['sistema'].unique()))
-            
-            # Statistics by zone
-            st.subheader("📈 Zone Statistics")
-            
-            zone_stats = df.groupby('zona_carga').agg({
-                'demanda': ['mean', 'max', 'min', 'std'],
-                'fecha': 'count'
-            }).round(2)
-            
-            zone_stats.columns = ['Avg Demand (MW)', 'Peak Demand (MW)', 
-                                 'Min Demand (MW)', 'Std Dev', 'Records']
-            zone_stats = zone_stats.sort_values('Peak Demand (MW)', ascending=False)
-            
-            st.dataframe(zone_stats, use_container_width=True)
-            
-            # Data preview
-            st.subheader("🔍 Data Preview")
-            
-            # Add filters for preview
-            col1, col2 = st.columns(2)
-            with col1:
-                preview_zone = st.selectbox(
-                    "Filter by Zone (Preview)",
-                    ["All"] + list(df['zona_carga'].unique())
-                )
-            with col2:
-                preview_limit = st.number_input(
-                    "Number of rows",
-                    min_value=10,
-                    max_value=1000,
-                    value=100,
-                    step=10
-                )
-            
-            # Apply preview filters
-            preview_df = df if preview_zone == "All" else df[df['zona_carga'] == preview_zone]
-            st.dataframe(preview_df.head(preview_limit), use_container_width=True)
+            # Check if DataFrame has required columns and data
+            if 'fecha' not in df.columns or 'zona_carga' not in df.columns:
+                st.warning("⚠️ No data available to display")
+            else:
+                st.subheader("📊 Data Overview")
+                
+                # Key metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Records", f"{len(df):,}")
+                with col2:
+                    st.metric("Date Range", f"{df['fecha'].min().date()} to {df['fecha'].max().date()}")
+                with col3:
+                    st.metric("Zones", len(df['zona_carga'].unique()))
+                with col4:
+                    st.metric("Systems", len(df['sistema'].unique()))
+                
+                # Statistics by zone
+                st.subheader("📈 Zone Statistics")
+                
+                zone_stats = df.groupby('zona_carga').agg({
+                    'demanda': ['mean', 'max', 'min', 'std'],
+                    'fecha': 'count'
+                }).round(2)
+                
+                zone_stats.columns = ['Avg Demand (MW)', 'Peak Demand (MW)', 
+                                     'Min Demand (MW)', 'Std Dev', 'Records']
+                zone_stats = zone_stats.sort_values('Peak Demand (MW)', ascending=False)
+                
+                st.dataframe(zone_stats, use_container_width=True)
+                
+                # Data preview
+                st.subheader("🔍 Data Preview")
+                
+                # Add filters for preview
+                col1, col2 = st.columns(2)
+                with col1:
+                    preview_zone = st.selectbox(
+                        "Filter by Zone (Preview)",
+                        ["All"] + list(df['zona_carga'].unique()),
+                        key="preview_zone_selectbox"
+                    )
+                with col2:
+                    preview_limit = st.number_input(
+                        "Number of rows",
+                        min_value=10,
+                        max_value=1000,
+                        value=100,
+                        step=10
+                    )
+                
+                # Apply preview filters
+                preview_df = df if preview_zone == "All" else df[df['zona_carga'] == preview_zone]
+                st.dataframe(preview_df.head(preview_limit), use_container_width=True)
     
     with tab2:
         # Visualizations Tab
-        if st.session_state.download_data is not None:
-            df = st.session_state.download_data
+        df = st.session_state.download_data
+        if df is not None and not df.empty and 'zona_carga' in df.columns:
             
             st.subheader("📈 Data Visualizations")
             
@@ -452,8 +456,8 @@ with main_container:
     
     with tab3:
         # Downloads Tab
-        if st.session_state.download_data is not None:
-            df = st.session_state.download_data
+        df = st.session_state.download_data
+        if df is not None and not df.empty and 'zona_carga' in df.columns:
             
             st.subheader("📁 Download Options")
             
@@ -670,18 +674,25 @@ if download_button:
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Show success message
-            st.success(f"""
-            ✅ **Download Complete!**
-            - Records: {len(final_df):,}
-            - Zones: {len(final_df['zona_carga'].unique())}
-            - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
-            
-            Navigate to the **Dashboard** or **Downloads** tab to access your data.
-            """)
+            # Check if we have valid data before accessing columns
+            if not final_df.empty and 'fecha' in final_df.columns and 'zona_carga' in final_df.columns:
+                # Show success message
+                st.success(f"""
+                ✅ **Download Complete!**
+                - Records: {len(final_df):,}
+                - Zones: {len(final_df['zona_carga'].unique())}
+                - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
+                
+                Navigate to the **Dashboard** or **Downloads** tab to access your data.
+                """)
+            else:
+                st.warning("⚠️ Download completed but no valid data was returned.")
             
             # Auto-switch to dashboard tab
             st.balloons()
+            
+            # Force rerun to update tabs with new data
+            st.rerun()
             
         except Exception as e:
             st.error(f"""
