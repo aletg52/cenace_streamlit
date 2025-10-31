@@ -176,7 +176,8 @@ with st.sidebar:
     process_type = st.selectbox(
         "Process Type",
         ["MDA"],
-        help="MDA: Mercado del Día en Adelanto"
+        help="MDA: Mercado del Día en Adelanto",
+        key="process_type_selectbox"
     )
     
     # API Settings (with best practices)
@@ -342,7 +343,15 @@ with main_container:
     with tab2:
         # Visualizations Tab - Always get fresh data from session state
         df = st.session_state.get('download_data', None)
-        if df is not None and not df.empty and 'zona_carga' in df.columns:
+        # Check for all required columns including 'fecha' and 'datetime'
+        has_valid_data = (df is not None and 
+                         hasattr(df, 'empty') and 
+                         not df.empty and
+                         'zona_carga' in df.columns and
+                         'fecha' in df.columns and
+                         'datetime' in df.columns)
+        
+        if has_valid_data:
             
             st.subheader("📈 Data Visualizations")
             
@@ -350,14 +359,16 @@ with main_container:
             viz_type = st.selectbox(
                 "Select Visualization",
                 ["Demand Time Series", "Daily Patterns", "Zone Comparison", 
-                 "Heatmap", "Peak Analysis", "Weekday vs Weekend"]
+                 "Heatmap", "Peak Analysis", "Weekday vs Weekend"],
+                key="viz_type_selectbox"
             )
             
             if viz_type == "Demand Time Series":
                 # Time series plot
                 zone_to_plot = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique()
+                    df['zona_carga'].unique(),
+                    key="viz_zone_plot_selectbox"
                 )
                 
                 zone_df = df[df['zona_carga'] == zone_to_plot].copy()
@@ -372,7 +383,8 @@ with main_container:
                 # Daily pattern analysis
                 zone_to_analyze = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique()
+                    df['zona_carga'].unique(),
+                    key="viz_zone_analyze_selectbox"
                 )
                 
                 zone_df = df[df['zona_carga'] == zone_to_analyze].copy()
@@ -423,7 +435,8 @@ with main_container:
                 # Create hourly heatmap
                 zone_for_heatmap = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique()
+                    df['zona_carga'].unique(),
+                    key="viz_zone_heatmap_selectbox"
                 )
                 
                 zone_df = df[df['zona_carga'] == zone_for_heatmap].copy()
@@ -475,7 +488,14 @@ with main_container:
         if 'download_data' in st.session_state and st.session_state.download_data is not None:
             df = st.session_state.download_data.copy() if hasattr(st.session_state.download_data, 'copy') else st.session_state.download_data
         
-        if df is not None and not df.empty and 'zona_carga' in df.columns:
+        # Check for all required columns
+        has_valid_data = (df is not None and 
+                         hasattr(df, 'empty') and 
+                         not df.empty and
+                         'zona_carga' in df.columns and
+                         'fecha' in df.columns)
+        
+        if has_valid_data:
             
             st.subheader("📁 Download Options")
             
@@ -526,14 +546,19 @@ with main_container:
                     # Raw data
                     df.to_excel(writer, sheet_name='Raw Data', index=False)
                     
-                    # Zone statistics
-                    zone_stats.to_excel(writer, sheet_name='Zone Statistics')
+                    # Zone statistics (calculate here)
+                    if 'demanda' in df.columns:
+                        zone_stats = df.groupby('zona_carga')['demanda'].agg(['mean', 'max', 'min', 'std', 'count']).round(2)
+                        zone_stats.columns = ['Avg Demand (MW)', 'Peak Demand (MW)', 
+                                             'Min Demand (MW)', 'Std Dev', 'Records']
+                        zone_stats.to_excel(writer, sheet_name='Zone Statistics')
                     
-                    # Daily summary
-                    daily_summary = df.groupby(df['fecha'].dt.date).agg({
-                        'demanda': ['mean', 'max', 'min', 'sum']
-                    }).round(2)
-                    daily_summary.to_excel(writer, sheet_name='Daily Summary')
+                    # Daily summary (only if fecha exists and is datetime)
+                    if 'fecha' in df.columns and pd.api.types.is_datetime64_any_dtype(df['fecha']):
+                        daily_summary = df.groupby(df['fecha'].dt.date).agg({
+                            'demanda': ['mean', 'max', 'min', 'sum']
+                        }).round(2)
+                        daily_summary.to_excel(writer, sheet_name='Daily Summary')
                 
                 st.download_button(
                     label="⬇️ Download Excel Report",
@@ -548,7 +573,8 @@ with main_container:
             
             zone_to_download = st.selectbox(
                 "Select Zone",
-                df['zona_carga'].unique()
+                df['zona_carga'].unique(),
+                key="download_zone_selectbox"
             )
             
             zone_df = df[df['zona_carga'] == zone_to_download]
@@ -695,41 +721,6 @@ if download_button:
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Show download complete message with a prominent refresh button
-            if not final_df.empty and 'fecha' in final_df.columns and 'zona_carga' in final_df.columns:
-                st.success(f"""
-                ✅ **Download Complete!**
-                - Records: {len(final_df):,}
-                - Zones: {len(final_df['zona_carga'].unique())}
-                - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
-                """)
-                st.balloons()
-                
-                # Show a prominent, highly visible button to view data
-                # Streamlit doesn't support programmatic reruns from button handlers,
-                # so we provide a clear button that triggers natural rerun via user interaction
-                st.markdown("---")
-                
-                # Create a visually prominent section for the button
-                st.markdown("""
-                <div style='text-align: center; padding: 20px; background-color: #e8f5e9; border-radius: 10px; margin: 20px 0;'>
-                    <h3>🎯 Your Data is Ready!</h3>
-                    <p style='font-size: 16px;'>Click the button below to view your data in the Dashboard</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Large, prominent button
-                col1, col2, col3 = st.columns([1, 3, 1])
-                with col2:
-                    if st.button("📊 **View Data Now**", key="view_data_btn", use_container_width=True, type="primary"):
-                        # Button click naturally triggers Streamlit to rerun
-                        # Tabs will automatically show the data from session_state
-                        pass
-                
-                st.markdown("---")
-            else:
-                st.warning("⚠️ Download completed but no valid data was returned.")
-            
         except Exception as e:
             st.error(f"""
             ❌ **Download Failed**
@@ -744,6 +735,43 @@ if download_button:
             """)
             status_text.text("❌ Download failed")
             detail_text.text(str(e))
+
+# Show download complete message with a prominent refresh button (outside download handler)
+# This ensures the button persists even after reruns
+if st.session_state.get('download_complete', False):
+    df = st.session_state.get('download_data', None)
+    if df is not None and not df.empty and 'fecha' in df.columns and 'zona_carga' in df.columns:
+        st.markdown("---")
+        st.success(f"""
+        ✅ **Download Complete!**
+        - Records: {len(df):,}
+        - Zones: {len(df['zona_carga'].unique())}
+        - Date Range: {df['fecha'].min().date()} to {df['fecha'].max().date()}
+        """)
+        
+        # Create a visually prominent section for the button
+        st.markdown("""
+        <div style='text-align: center; padding: 20px; background-color: #e8f5e9; border-radius: 10px; margin: 20px 0; border: 2px solid #4caf50;'>
+            <h3 style='color: #2e7d32; margin-bottom: 10px;'>🎯 Your Data is Ready!</h3>
+            <p style='font-size: 16px; color: #388e3c; margin-bottom: 15px;'>Click the button below to view your data in the Dashboard</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Large, prominent button in the main content area
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            view_button = st.button(
+                "📊 **View Data in Dashboard**", 
+                key="view_data_btn", 
+                use_container_width=True, 
+                type="primary"
+            )
+            if view_button:
+                # Scroll to top or switch tab - the data is already in session_state
+                # The button click will trigger a rerun and tabs will show the data
+                st.rerun()
+        
+        st.markdown("---")
 
 # Footer
 st.markdown("---")
