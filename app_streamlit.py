@@ -64,14 +64,7 @@ if 'progress_text' not in st.session_state:
     st.session_state.progress_text = ""
 if 'data_refresh_key' not in st.session_state:
     st.session_state.data_refresh_key = 0
-if 'pending_rerun' not in st.session_state:
-    st.session_state.pending_rerun = False
-
-# Check if we need to trigger a rerun from a previous download
-# This check happens at the top before any widgets, so rerun works properly
-if st.session_state.pending_rerun:
-    st.session_state.pending_rerun = False
-    st.rerun()
+# Note: We don't use pending_rerun anymore - widget interactions handle reruns naturally
 
 # Header
 st.title("⚡ CENACE Demand Data Downloader")
@@ -89,10 +82,13 @@ with st.sidebar:
     
     # System filter
     systems = ["All"] + list(all_zones.keys())
+    
+    # System filter - this widget naturally triggers reruns when changed
     selected_system = st.selectbox(
         "Filter by System",
         systems,
-        help="Filter zones by electrical system"
+        help="Filter zones by electrical system",
+        key="system_filter_selectbox"
     )
     
     # Prepare zone options based on system filter
@@ -239,9 +235,18 @@ with main_container:
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "📈 Visualizations", "📁 Downloads", "ℹ️ Help"])
     
     with tab1:
-        # Dashboard Tab - Always get fresh data from session state
-        df = st.session_state.get('download_data', None)
-        if df is None or (hasattr(df, 'empty') and df.empty):
+        # Dashboard Tab - Always read fresh from session state
+        # Use .get() to ensure we're reading the current value, not a cached reference
+        df = st.session_state.get('download_data')
+        
+        # Check if we have valid data
+        has_valid_data = (df is not None and 
+                         hasattr(df, 'empty') and 
+                         not df.empty and
+                         'fecha' in df.columns and 
+                         'zona_carga' in df.columns)
+        
+        if not has_valid_data:
             # Show instructions when no data
             st.markdown("""
             ### 👋 Welcome to CENACE Demand Downloader
@@ -466,7 +471,10 @@ with main_container:
     
     with tab3:
         # Downloads Tab - Always get fresh data from session state
-        df = st.session_state.get('download_data', None)
+        df = None
+        if 'download_data' in st.session_state and st.session_state.download_data is not None:
+            df = st.session_state.download_data.copy() if hasattr(st.session_state.download_data, 'copy') else st.session_state.download_data
+        
         if df is not None and not df.empty and 'zona_carga' in df.columns:
             
             st.subheader("📁 Download Options")
@@ -687,22 +695,28 @@ if download_button:
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Show download complete message
+            # Show download complete message with a prominent refresh button
             if not final_df.empty and 'fecha' in final_df.columns and 'zona_carga' in final_df.columns:
                 st.success(f"""
                 ✅ **Download Complete!**
                 - Records: {len(final_df):,}
                 - Zones: {len(final_df['zona_carga'].unique())}
                 - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
-                
-                Navigate to the **Dashboard** or **Downloads** tab to access your data.
                 """)
                 st.balloons()
                 
-                # Force rerun immediately after showing success message
-                # This ensures tabs refresh with new data
-                st.session_state.pending_rerun = True
-                st.rerun()
+                # Show a prominent button to view data
+                # Streamlit doesn't support programmatic reruns from button handlers,
+                # so we provide a clear button that triggers natural rerun via user interaction
+                st.markdown("---")
+                col1, col2, col3 = st.columns([1, 4, 1])
+                with col2:
+                    st.markdown("### 🎯 Ready to View Your Data!")
+                    st.info("Click the button below to refresh the Dashboard and view your downloaded data.")
+                    if st.button("📊 View Data in Dashboard", key="view_data_btn", use_container_width=True, type="primary"):
+                        # This button click naturally triggers Streamlit to rerun
+                        # and the tabs will show the data from session_state
+                        st.rerun()
             else:
                 st.warning("⚠️ Download completed but no valid data was returned.")
             
