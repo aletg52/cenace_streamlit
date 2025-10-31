@@ -705,18 +705,28 @@ if download_button:
                 """)
                 st.balloons()
                 
-                # Show a prominent button to view data
+                # Show a prominent, highly visible button to view data
                 # Streamlit doesn't support programmatic reruns from button handlers,
                 # so we provide a clear button that triggers natural rerun via user interaction
                 st.markdown("---")
-                col1, col2, col3 = st.columns([1, 4, 1])
+                
+                # Create a visually prominent section for the button
+                st.markdown("""
+                <div style='text-align: center; padding: 20px; background-color: #e8f5e9; border-radius: 10px; margin: 20px 0;'>
+                    <h3>🎯 Your Data is Ready!</h3>
+                    <p style='font-size: 16px;'>Click the button below to view your data in the Dashboard</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Large, prominent button
+                col1, col2, col3 = st.columns([1, 3, 1])
                 with col2:
-                    st.markdown("### 🎯 Ready to View Your Data!")
-                    st.info("Click the button below to refresh the Dashboard and view your downloaded data.")
-                    if st.button("📊 View Data in Dashboard", key="view_data_btn", use_container_width=True, type="primary"):
-                        # This button click naturally triggers Streamlit to rerun
-                        # and the tabs will show the data from session_state
-                        st.rerun()
+                    if st.button("📊 **View Data Now**", key="view_data_btn", use_container_width=True, type="primary"):
+                        # Button click naturally triggers Streamlit to rerun
+                        # Tabs will automatically show the data from session_state
+                        pass
+                
+                st.markdown("---")
             else:
                 st.warning("⚠️ Download completed but no valid data was returned.")
             
