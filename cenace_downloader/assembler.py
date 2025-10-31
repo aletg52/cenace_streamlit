@@ -48,7 +48,8 @@ class DataAssembler:
         """
         if not raw_data:
             logger.warning("No data to assemble")
-            return pd.DataFrame()
+            # Return empty DataFrame with expected columns to prevent KeyErrors
+            return pd.DataFrame(columns=['sistema', 'zona_carga', 'fecha', 'hora', 'demanda'])
         
         logger.info(f"Assembling {len(raw_data)} records")
         
