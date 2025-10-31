@@ -64,6 +64,8 @@ if 'progress_text' not in st.session_state:
     st.session_state.progress_text = ""
 if 'data_refresh_key' not in st.session_state:
     st.session_state.data_refresh_key = 0
+if 'download_ready' not in st.session_state:
+    st.session_state.download_ready = False
 # Note: We don't use pending_rerun anymore - widget interactions handle reruns naturally
 
 # Header
@@ -227,6 +229,11 @@ with st.sidebar:
         use_container_width=True,
         type="primary"
     )
+
+# Check for rerun trigger before building tabs
+if st.session_state.get('download_ready'):
+    # Clear the flag so subsequent reruns don't loop
+    st.session_state.download_ready = False
 
 # Main content area
 main_container = st.container()
@@ -712,18 +719,22 @@ if download_button:
             # Assemble final dataframe
             status_text.text("Assembling final dataset...")
             final_df = assembler.assemble_data(all_data)
-            
-            # Store in session state
-            st.session_state.download_data = final_df
-            st.session_state.download_complete = True
-            
-            # Increment refresh key to ensure widgets update
-            st.session_state.data_refresh_key += 1
-            
+
             # Clear progress indicators
             progress_bar.progress(1.0)
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
+
+            # Store in session state
+            st.session_state.download_data = final_df
+            st.session_state.download_complete = True
+
+            # Increment refresh key to ensure widgets update
+            st.session_state.data_refresh_key += 1
+
+            # Trigger a rerun so widgets render updated data immediately
+            st.session_state.download_ready = True
+            st.rerun()
             
         except Exception as e:
             st.error(f"""
