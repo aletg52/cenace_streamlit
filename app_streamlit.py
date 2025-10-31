@@ -62,6 +62,8 @@ if 'download_complete' not in st.session_state:
     st.session_state.download_complete = False
 if 'progress_text' not in st.session_state:
     st.session_state.progress_text = ""
+if 'trigger_rerun' not in st.session_state:
+    st.session_state.trigger_rerun = False
 
 # Header
 st.title("⚡ CENACE Demand Data Downloader")
@@ -222,6 +224,18 @@ with st.sidebar:
     )
 
 # Main content area
+# Show success message if download just completed (after rerun)
+if st.session_state.download_complete and st.session_state.download_data is not None:
+    df_check = st.session_state.download_data
+    if not df_check.empty and 'fecha' in df_check.columns and 'zona_carga' in df_check.columns:
+        st.success(f"""
+        ✅ **Download Complete!**
+        - Records: {len(df_check):,}
+        - Zones: {len(df_check['zona_carga'].unique())}
+        - Date Range: {df_check['fecha'].min().date()} to {df_check['fecha'].max().date()}
+        """)
+        st.balloons()
+
 main_container = st.container()
 
 with main_container:
@@ -231,7 +245,7 @@ with main_container:
     with tab1:
         # Dashboard Tab
         df = st.session_state.download_data
-        if df is None or df.empty:
+        if df is None or (hasattr(df, 'empty') and df.empty):
             # Show instructions when no data
             st.markdown("""
             ### 👋 Welcome to CENACE Demand Downloader
@@ -665,7 +679,7 @@ if download_button:
             status_text.text("Assembling final dataset...")
             final_df = assembler.assemble_data(all_data)
             
-            # Store in session state
+            # Store in session state FIRST - this is critical for rerun to see the data
             st.session_state.download_data = final_df
             st.session_state.download_complete = True
             
@@ -674,25 +688,12 @@ if download_button:
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Check if we have valid data before accessing columns
-            if not final_df.empty and 'fecha' in final_df.columns and 'zona_carga' in final_df.columns:
-                # Show success message
-                st.success(f"""
-                ✅ **Download Complete!**
-                - Records: {len(final_df):,}
-                - Zones: {len(final_df['zona_carga'].unique())}
-                - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
-                
-                Navigate to the **Dashboard** or **Downloads** tab to access your data.
-                """)
-            else:
-                st.warning("⚠️ Download completed but no valid data was returned.")
-            
-            # Auto-switch to dashboard tab
-            st.balloons()
-            
-            # Force rerun to update tabs with new data
+            # Force rerun IMMEDIATELY after storing data - before any UI messages
+            # This ensures tabs refresh with new data
             st.rerun()
+            
+            # Note: The success message will show on the next rerun
+            # We'll handle that in the main tab rendering
             
         except Exception as e:
             st.error(f"""
