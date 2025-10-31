@@ -269,11 +269,6 @@ with main_container:
             # Show data dashboard
             df = st.session_state.download_data
             
-            # Check if DataFrame has required columns and data
-            if df.empty or 'fecha' not in df.columns:
-                st.warning("⚠️ No data available to display")
-                return
-            
             st.subheader("📊 Data Overview")
             
             # Key metrics
@@ -310,8 +305,7 @@ with main_container:
             with col1:
                 preview_zone = st.selectbox(
                     "Filter by Zone (Preview)",
-                    ["All"] + list(df['zona_carga'].unique()),
-                    key="preview_zone_selectbox"
+                    ["All"] + list(df['zona_carga'].unique())
                 )
             with col2:
                 preview_limit = st.number_input(
@@ -337,16 +331,14 @@ with main_container:
             viz_type = st.selectbox(
                 "Select Visualization",
                 ["Demand Time Series", "Daily Patterns", "Zone Comparison", 
-                 "Heatmap", "Peak Analysis", "Weekday vs Weekend"],
-                key="viz_type_selectbox"
+                 "Heatmap", "Peak Analysis", "Weekday vs Weekend"]
             )
             
             if viz_type == "Demand Time Series":
                 # Time series plot
                 zone_to_plot = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique(),
-                    key="timeseries_zone_selectbox"
+                    df['zona_carga'].unique()
                 )
                 
                 zone_df = df[df['zona_carga'] == zone_to_plot].copy()
@@ -361,8 +353,7 @@ with main_container:
                 # Daily pattern analysis
                 zone_to_analyze = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique(),
-                    key="daily_patterns_zone_selectbox"
+                    df['zona_carga'].unique()
                 )
                 
                 zone_df = df[df['zona_carga'] == zone_to_analyze].copy()
@@ -413,8 +404,7 @@ with main_container:
                 # Create hourly heatmap
                 zone_for_heatmap = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique(),
-                    key="heatmap_zone_selectbox"
+                    df['zona_carga'].unique()
                 )
                 
                 zone_df = df[df['zona_carga'] == zone_for_heatmap].copy()
@@ -536,8 +526,7 @@ with main_container:
             
             zone_to_download = st.selectbox(
                 "Select Zone",
-                df['zona_carga'].unique(),
-                key="download_zone_selectbox"
+                df['zona_carga'].unique()
             )
             
             zone_df = df[df['zona_carga'] == zone_to_download]
@@ -681,26 +670,18 @@ if download_button:
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Check if we have valid data before accessing columns
-            if not final_df.empty and 'fecha' in final_df.columns and 'zona_carga' in final_df.columns:
-                # Show success message
-                st.success(f"""
-                ✅ **Download Complete!**
-                - Records: {len(final_df):,}
-                - Zones: {len(final_df['zona_carga'].unique())}
-                - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
-                
-                Navigate to the **Dashboard** or **Downloads** tab to access your data.
-                """)
-            else:
-                st.warning("⚠️ Download completed but no valid data was returned.")
+            # Show success message
+            st.success(f"""
+            ✅ **Download Complete!**
+            - Records: {len(final_df):,}
+            - Zones: {len(final_df['zona_carga'].unique())}
+            - Date Range: {final_df['fecha'].min().date()} to {final_df['fecha'].max().date()}
+            
+            Navigate to the **Dashboard** or **Downloads** tab to access your data.
+            """)
             
             # Auto-switch to dashboard tab
             st.balloons()
-            
-            # Force a rerun to update the tabs with new data
-            time.sleep(0.5)  # Small delay to ensure state is saved
-            st.rerun()
             
         except Exception as e:
             st.error(f"""
