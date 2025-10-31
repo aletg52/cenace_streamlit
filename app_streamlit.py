@@ -571,22 +571,26 @@ with main_container:
             # Individual zone downloads
             st.markdown("### 📑 Download Individual Zones")
             
-            zone_to_download = st.selectbox(
-                "Select Zone",
-                df['zona_carga'].unique(),
-                key="download_zone_selectbox"
-            )
-            
-            zone_df = df[df['zona_carga'] == zone_to_download]
-            csv_buffer = io.StringIO()
-            zone_df.to_csv(csv_buffer, index=False)
-            
-            st.download_button(
-                label=f"⬇️ Download {zone_to_download} Data",
-                data=csv_buffer.getvalue(),
-                file_name=f"cenace_{zone_to_download.replace(' ', '_')}_{start_date}_{end_date}.csv",
-                mime="text/csv"
-            )
+            # Ensure we have zones to select from
+            if len(df['zona_carga'].unique()) > 0:
+                zone_to_download = st.selectbox(
+                    "Select Zone",
+                    df['zona_carga'].unique(),
+                    key="download_tab_zone_selectbox"
+                )
+                
+                zone_df = df[df['zona_carga'] == zone_to_download]
+                csv_buffer = io.StringIO()
+                zone_df.to_csv(csv_buffer, index=False)
+                
+                st.download_button(
+                    label=f"⬇️ Download {zone_to_download} Data",
+                    data=csv_buffer.getvalue(),
+                    file_name=f"cenace_{zone_to_download.replace(' ', '_')}_{start_date}_{end_date}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.warning("No zones available for download")
             
         else:
             st.info("📁 Download data first to access download options")
