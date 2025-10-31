@@ -168,22 +168,48 @@ class CENACEClient:
             root = ET.fromstring(f'<root>{xml_content}</root>')
             
             data = []
-            for zona in root.findall('.//Zona'):
-                zona_carga = zona.get('zona_carga', '').strip()
+            # Parse the actual XML structure: <Resultados><Zona_Carga>...</Zona_Carga></Resultados>
+            for zona_carga_elem in root.findall('.//Zona_Carga'):
+                # Get zona_carga from child element text, not attribute
+                zona_carga = zona_carga_elem.findtext('zona_carga', '').strip()
                 
-                for valores in zona.findall('.//Valores'):
-                    for dato in valores.findall('valores'):
-                        try:
-                            record = {
-                                'zona_carga': zona_carga,
-                                'fecha': dato.get('fecha'),
-                                'hora': int(dato.get('hora', 0)),
-                                'demanda': float(dato.get('total_cargas', 0))
-                            }
-                            data.append(record)
-                        except (ValueError, TypeError) as e:
-                            logger.warning(f"Error parsing record: {e}")
+                if not zona_carga:
+                    logger.warning("Could not find zona_carga in Zona_Carga element")
+                    continue
+                
+                # Find Valores container
+                valores_elem = zona_carga_elem.find('Valores')
+                if valores_elem is None:
+                    continue
+                
+                # Iterate through Valor elements (capital V, not lowercase valores)
+                for valor in valores_elem.findall('Valor'):
+                    try:
+                        # Get values from child element text, not attributes
+                        fecha = valor.findtext('fecha', '').strip()
+                        hora_str = valor.findtext('hora', '0').strip()
+                        demanda_str = valor.findtext('total_cargas', '0').strip()
+                        
+                        if not fecha:
+                            logger.warning("Missing fecha in Valor element")
                             continue
+                        
+                        record = {
+                            'zona_carga': zona_carga,
+                            'fecha': fecha,
+                            'hora': int(hora_str) if hora_str else 0,
+                            'demanda': float(demanda_str) if demanda_str else 0.0
+                        }
+                        data.append(record)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Error parsing Valor record: {e}")
+                        continue
+            
+            if not data:
+                logger.warning("No data extracted from XML. Checking structure...")
+                # Log XML structure for debugging
+                logger.debug(f"XML root: {root.tag}")
+                logger.debug(f"Found elements: {[elem.tag for elem in root.iter()][:20]}")
             
             return data
             
@@ -199,30 +225,55 @@ class CENACEClient:
             root = ET.fromstring(xml_content)
             
             data = []
-            # Look for different possible node names
-            for node in root.iter():
-                if 'zona_carga' in node.attrib or 'zona' in node.attrib:
-                    zona_carga = node.get('zona_carga', node.get('zona', '')).strip()
-                    fecha = node.get('fecha', '')
-                    hora = node.get('hora', node.get('hour', '1'))
-                    demanda = node.get('total_cargas', node.get('demanda', '0'))
+            
+            # Try to find Zona_Carga elements (with underscore) or Zona elements
+            for zona_elem in root.findall('.//Zona_Carga') + root.findall('.//Zona'):
+                # Try to get zona_carga from child element or attribute
+                zona_carga = zona_elem.findtext('zona_carga', '')
+                if not zona_carga:
+                    zona_carga = zona_elem.get('zona_carga', zona_elem.get('zona', '')).strip()
+                
+                if not zona_carga:
+                    continue
+                
+                # Look for Valores container
+                valores_container = zona_elem.find('Valores')
+                if valores_container is None:
+                    continue
+                
+                # Look for Valor or valores elements (try both capital and lowercase)
+                for valor in valores_container.findall('Valor') + valores_container.findall('valores'):
+                    # Try to get from child elements first (using findtext)
+                    fecha = valor.findtext('fecha', '')
+                    if not fecha:
+                        fecha = valor.get('fecha', '')
                     
-                    if fecha and demanda:
+                    hora_str = valor.findtext('hora', '')
+                    if not hora_str:
+                        hora_str = valor.get('hora', valor.get('hour', '0'))
+                    
+                    demanda_str = valor.findtext('total_cargas', '')
+                    if not demanda_str:
+                        demanda_str = valor.get('total_cargas', valor.get('demanda', '0'))
+                    
+                    if fecha and demanda_str:
                         try:
                             record = {
-                                'zona_carga': zona_carga,
-                                'fecha': fecha,
-                                'hora': int(hora),
-                                'demanda': float(demanda)
+                                'zona_carga': zona_carga.strip(),
+                                'fecha': fecha.strip(),
+                                'hora': int(hora_str) if hora_str else 0,
+                                'demanda': float(demanda_str) if demanda_str else 0.0
                             }
                             data.append(record)
-                        except (ValueError, TypeError):
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error parsing record in alternative parser: {e}")
                             continue
             
             return data
             
         except Exception as e:
             logger.error(f"Alternative XML parsing failed: {e}")
+            logger.error(f"XML content (first 500 chars): {xml_content[:500]}")
             return []
     
     def _download_chunk(self, system: str, zones: List[str], start_date: datetime.date,
