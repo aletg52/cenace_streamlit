@@ -62,8 +62,16 @@ if 'download_complete' not in st.session_state:
     st.session_state.download_complete = False
 if 'progress_text' not in st.session_state:
     st.session_state.progress_text = ""
-if 'trigger_rerun' not in st.session_state:
-    st.session_state.trigger_rerun = False
+if 'data_refresh_key' not in st.session_state:
+    st.session_state.data_refresh_key = 0
+if 'pending_rerun' not in st.session_state:
+    st.session_state.pending_rerun = False
+
+# Check if we need to trigger a rerun from a previous download
+# This check happens at the top before any widgets, so rerun works properly
+if st.session_state.pending_rerun:
+    st.session_state.pending_rerun = False
+    st.rerun()
 
 # Header
 st.title("⚡ CENACE Demand Data Downloader")
@@ -224,17 +232,25 @@ with st.sidebar:
     )
 
 # Main content area
-# Show success message if download just completed (after rerun)
+# Create a placeholder for success message that can be updated
+success_placeholder = st.empty()
+
+# Show success message if download just completed
 if st.session_state.download_complete and st.session_state.download_data is not None:
     df_check = st.session_state.download_data
     if not df_check.empty and 'fecha' in df_check.columns and 'zona_carga' in df_check.columns:
-        st.success(f"""
-        ✅ **Download Complete!**
-        - Records: {len(df_check):,}
-        - Zones: {len(df_check['zona_carga'].unique())}
-        - Date Range: {df_check['fecha'].min().date()} to {df_check['fecha'].max().date()}
-        """)
-        st.balloons()
+        with success_placeholder.container():
+            st.success(f"""
+            ✅ **Download Complete!**
+            - Records: {len(df_check):,}
+            - Zones: {len(df_check['zona_carga'].unique())}
+            - Date Range: {df_check['fecha'].min().date()} to {df_check['fecha'].max().date()}
+            """)
+            st.balloons()
+            
+            # The rerun from download should have already updated the tabs
+            # But if user still doesn't see data, they can refresh manually
+            st.caption("💡 If data doesn't appear, try clicking 'Filter by System' in the sidebar to refresh")
 
 main_container = st.container()
 
@@ -243,8 +259,8 @@ with main_container:
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "📈 Visualizations", "📁 Downloads", "ℹ️ Help"])
     
     with tab1:
-        # Dashboard Tab
-        df = st.session_state.download_data
+        # Dashboard Tab - Always get fresh data from session state
+        df = st.session_state.get('download_data', None)
         if df is None or (hasattr(df, 'empty') and df.empty):
             # Show instructions when no data
             st.markdown("""
@@ -339,8 +355,8 @@ with main_container:
                 st.dataframe(preview_df.head(preview_limit), use_container_width=True)
     
     with tab2:
-        # Visualizations Tab
-        df = st.session_state.download_data
+        # Visualizations Tab - Always get fresh data from session state
+        df = st.session_state.get('download_data', None)
         if df is not None and not df.empty and 'zona_carga' in df.columns:
             
             st.subheader("📈 Data Visualizations")
@@ -469,8 +485,8 @@ with main_container:
             st.info("📊 Download data first to see visualizations")
     
     with tab3:
-        # Downloads Tab
-        df = st.session_state.download_data
+        # Downloads Tab - Always get fresh data from session state
+        df = st.session_state.get('download_data', None)
         if df is not None and not df.empty and 'zona_carga' in df.columns:
             
             st.subheader("📁 Download Options")
@@ -679,21 +695,23 @@ if download_button:
             status_text.text("Assembling final dataset...")
             final_df = assembler.assemble_data(all_data)
             
-            # Store in session state FIRST - this is critical for rerun to see the data
+            # Store in session state
             st.session_state.download_data = final_df
             st.session_state.download_complete = True
+            
+            # Increment refresh key to ensure widgets update
+            st.session_state.data_refresh_key += 1
             
             # Clear progress indicators
             progress_bar.progress(1.0)
             status_text.text("✅ Download complete!")
             detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
-            # Force rerun IMMEDIATELY after storing data - before any UI messages
-            # This ensures tabs refresh with new data
-            st.rerun()
+            # Set flag for rerun at top of script (more reliable than calling rerun here)
+            st.session_state.pending_rerun = True
             
-            # Note: The success message will show on the next rerun
-            # We'll handle that in the main tab rendering
+            # Also try immediate rerun as backup
+            st.rerun()
             
         except Exception as e:
             st.error(f"""
