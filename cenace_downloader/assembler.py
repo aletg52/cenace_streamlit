@@ -7,7 +7,7 @@ Handles data concatenation, cleaning, and export to various formats
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import List, Dict, Optional, Sequence
+from typing import List, Dict, Optional
 import logging
 import zipfile
 import io
@@ -33,56 +33,29 @@ class DataAssembler:
         self.data = None
         self.assembled_at = None
     
-    def assemble_data(
-        self,
-        demand_data: Optional[Sequence[Dict]] = None,
-        price_data: Optional[Sequence[Dict]] = None
-    ) -> pd.DataFrame:
-        """Assemble raw demand and price data into a clean DataFrame."""
-
-        if demand_data is None and price_data is None:
+    def assemble_data(self, raw_data: List[Dict]) -> pd.DataFrame:
+        """
+        Assemble raw data into a clean DataFrame
+        
+        Parameters:
+        -----------
+        raw_data : List[Dict]
+            Raw data from API responses
+        
+        Returns:
+        --------
+        pd.DataFrame : Clean, assembled dataframe
+        """
+        if not raw_data:
             logger.warning("No data to assemble")
-            return pd.DataFrame(columns=['sistema', 'zona_carga', 'fecha', 'hora', 'demanda', 'datetime'])
-
-        def _to_dataframe(records: Optional[Sequence[Dict]]) -> pd.DataFrame:
-            if records is None:
-                return pd.DataFrame()
-            if isinstance(records, pd.DataFrame):
-                return records.copy()
-            return pd.DataFrame(list(records)) if records else pd.DataFrame()
-
-        demand_df = _to_dataframe(demand_data)
-        price_df = _to_dataframe(price_data)
-
-        merge_keys = ['sistema', 'zona_carga', 'fecha', 'hora']
-
-        if demand_df.empty and price_df.empty:
-            logger.warning("Provided data frames are empty")
-            return pd.DataFrame(columns=merge_keys + ['demanda', 'datetime'])
-
-        if price_df.empty:
-            df = demand_df
-        elif demand_df.empty:
-            df = price_df
-        else:
-            rename_map = {}
-            for col in price_df.columns:
-                if col in merge_keys:
-                    continue
-                if col in demand_df.columns:
-                    rename_map[col] = f"{col}_price"
-
-            price_df = price_df.rename(columns=rename_map)
-            price_columns = [col for col in price_df.columns if col not in merge_keys]
-            df = pd.merge(
-                demand_df,
-                price_df[merge_keys + price_columns],
-                on=merge_keys,
-                how='outer'
-            )
-
-        logger.info(f"Assembling {len(df)} records")
-
+            # Return empty DataFrame with expected columns to prevent KeyError
+            return pd.DataFrame(columns=['sistema', 'zona_carga', 'fecha', 'hora', 'demanda', 'datetime', 'process'])
+        
+        logger.info(f"Assembling {len(raw_data)} records")
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(raw_data)
+        
         # Clean and transform data
         df = self._clean_data(df)
         
@@ -106,20 +79,10 @@ class DataAssembler:
         
         return df
     
-    def _get_price_columns(self, df: pd.DataFrame) -> List[str]:
-        """Identify columns that contain price information."""
-        price_prefixes = ('precio', 'componente')
-        price_suffix = '_precio'
-        return [
-            col for col in df.columns
-            if col not in {'demanda'}
-            and (col.startswith(price_prefixes) or col.endswith(price_suffix))
-        ]
-
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and standardize the data"""
         # Ensure required columns exist
-        required_columns = ['sistema', 'zona_carga', 'fecha', 'hora']
+        required_columns = ['sistema', 'zona_carga', 'fecha', 'hora', 'demanda']
         for col in required_columns:
             if col not in df.columns:
                 if col == 'sistema':
@@ -127,34 +90,31 @@ class DataAssembler:
                 else:
                     logger.error(f"Missing required column: {col}")
                     return pd.DataFrame()
-
-        if 'demanda' not in df.columns:
-            df['demanda'] = np.nan
-
+        
+        # Ensure process column exists (default to MDA if missing for backward compatibility)
+        if 'process' not in df.columns:
+            df['process'] = 'MDA'
+        
         # Clean zone names (ensure spaces are preserved)
-        df['zona_carga'] = df['zona_carga'].astype(str).str.strip()
+        df['zona_carga'] = df['zona_carga'].str.strip()
         df['zona_carga'] = df['zona_carga'].str.replace('-', ' ')  # Convert dashes back to spaces
-
+        
         # Parse dates
         df['fecha'] = pd.to_datetime(df['fecha'], format='%Y-%m-%d', errors='coerce')
-
+        
         # Clean numeric columns
-        df['hora'] = pd.to_numeric(df['hora'], errors='coerce')
-        df['hora'] = df['hora'].clip(1, 24)
-        df['hora'] = df['hora'].fillna(1).astype(int)
-        df['demanda'] = pd.to_numeric(df['demanda'], errors='coerce')
-
-        # Normalize price-related columns
-        price_columns = self._get_price_columns(df)
-        for col in price_columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
+        df['hora'] = pd.to_numeric(df['hora'], errors='coerce').fillna(1).astype(int)
+        df['demanda'] = pd.to_numeric(df['demanda'], errors='coerce').fillna(0.0)
+        
         # Remove rows with invalid dates
         df = df[df['fecha'].notna()]
-
+        
+        # Ensure hora is in valid range (1-24)
+        df['hora'] = df['hora'].clip(1, 24)
+        
         # Remove negative demand values
-        df.loc[df['demanda'] < 0, 'demanda'] = np.nan
-
+        df.loc[df['demanda'] < 0, 'demanda'] = 0
+        
         return df
     
     def _add_derived_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -204,8 +164,11 @@ class DataAssembler:
         if df.empty:
             return df
         
-        # Identify duplicates
+        # Identify duplicates - include process if available
         duplicate_cols = ['sistema', 'zona_carga', 'fecha', 'hora']
+        if 'process' in df.columns:
+            duplicate_cols.append('process')
+        
         duplicates = df.duplicated(subset=duplicate_cols, keep='first')
         
         if duplicates.any():
@@ -215,11 +178,16 @@ class DataAssembler:
         return df
     
     def _sort_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Sort data by system, zone, and datetime"""
+        """Sort data by system, zone, process, and datetime"""
         if df.empty:
             return df
         
-        df = df.sort_values(['sistema', 'zona_carga', 'datetime'])
+        # Sort by process if available, otherwise just the standard columns
+        sort_cols = ['sistema', 'zona_carga', 'datetime']
+        if 'process' in df.columns:
+            sort_cols.insert(2, 'process')
+        
+        df = df.sort_values(sort_cols)
         df = df.reset_index(drop=True)
         
         return df
@@ -229,57 +197,27 @@ class DataAssembler:
         if df.empty:
             return df
         
-        price_columns = self._get_price_columns(df)
-
-        df['is_demand_anomaly'] = False
-        df['is_price_anomaly'] = False
-        for col in price_columns:
-            anomaly_col = f'is_anomaly_{col}'
-            if anomaly_col not in df.columns:
-                df[anomaly_col] = False
-
         # Calculate statistics for anomaly detection
-        for zona in df['zona_carga'].dropna().unique():
-            zona_mask = df['zona_carga'] == zona
-            zona_data = df.loc[zona_mask]
-
-            demand_series = zona_data['demanda'].dropna()
-            if not demand_series.empty:
-                mean_demand = demand_series.mean()
-                std_demand = demand_series.std()
-                if pd.notna(std_demand) and std_demand > 0:
-                    anomalies = (zona_data['demanda'] - mean_demand).abs() > 3 * std_demand
-                    df.loc[zona_mask, 'is_demand_anomaly'] = anomalies.fillna(False)
-                else:
-                    df.loc[zona_mask, 'is_demand_anomaly'] = False
+        for zona in df['zona_carga'].unique():
+            zona_data = df[df['zona_carga'] == zona]
+            
+            # Calculate mean and std
+            mean_demand = zona_data['demanda'].mean()
+            std_demand = zona_data['demanda'].std()
+            
+            # Flag anomalies (values beyond 3 standard deviations)
+            if std_demand > 0:
+                df.loc[df['zona_carga'] == zona, 'is_anomaly'] = (
+                    abs(df.loc[df['zona_carga'] == zona, 'demanda'] - mean_demand) > 3 * std_demand
+                )
             else:
-                df.loc[zona_mask, 'is_demand_anomaly'] = False
-
-            for price_col in price_columns:
-                anomaly_col = f'is_anomaly_{price_col}'
-                price_series = zona_data[price_col].dropna()
-                if price_series.empty:
-                    df.loc[zona_mask, anomaly_col] = False
-                    continue
-
-                mean_price = price_series.mean()
-                std_price = price_series.std()
-                if pd.notna(std_price) and std_price > 0:
-                    price_anomalies = (zona_data[price_col] - mean_price).abs() > 3 * std_price
-                    price_anomalies = price_anomalies.fillna(False)
-                    df.loc[zona_mask, anomaly_col] = price_anomalies
-                    df.loc[zona_mask, 'is_price_anomaly'] = df.loc[zona_mask, 'is_price_anomaly'] | price_anomalies
-                else:
-                    df.loc[zona_mask, anomaly_col] = False
-
+                df.loc[df['zona_carga'] == zona, 'is_anomaly'] = False
+        
         # Log anomalies
-        demand_anomalies = df[df.get('is_demand_anomaly', False) == True]
-        price_anomalies = df[df.get('is_price_anomaly', False) == True]
-        if len(demand_anomalies) > 0:
-            logger.info(f"Found {len(demand_anomalies)} anomalous demand readings")
-        if len(price_anomalies) > 0:
-            logger.info(f"Found {len(price_anomalies)} anomalous price readings")
-
+        anomalies = df[df.get('is_anomaly', False) == True]
+        if len(anomalies) > 0:
+            logger.info(f"Found {len(anomalies)} anomalous readings")
+        
         return df
     
     def get_statistics(self) -> Dict:
@@ -300,18 +238,10 @@ class DataAssembler:
             'avg_demand_mw': df['demanda'].mean(),
             'peak_demand_mw': df['demanda'].max(),
             'min_demand_mw': df['demanda'].min(),
-            'demand_anomalies': df.get('is_demand_anomaly', pd.Series([False])).sum(),
-            'price_anomalies': df.get('is_price_anomaly', pd.Series([False])).sum(),
+            'anomalies': df.get('is_anomaly', pd.Series([False])).sum(),
             'assembled_at': self.assembled_at.isoformat() if self.assembled_at else None
         }
-
-        price_columns = self._get_price_columns(df)
-        if price_columns:
-            stats['price_columns'] = price_columns
-            stats['avg_prices'] = {col: float(df[col].mean()) for col in price_columns}
-            stats['peak_prices'] = {col: float(df[col].max()) for col in price_columns}
-            stats['min_prices'] = {col: float(df[col].min()) for col in price_columns}
-
+        
         return stats
     
     def get_zone_statistics(self, zona: Optional[str] = None) -> pd.DataFrame:
@@ -324,27 +254,18 @@ class DataAssembler:
         if zona:
             df = df[df['zona_carga'] == zona]
         
-        aggregations: Dict[str, List[str]] = {
+        stats = df.groupby('zona_carga').agg({
             'demanda': ['count', 'mean', 'std', 'min', 'max', 'sum'],
             'fecha': ['min', 'max']
-        }
-
-        for col in self._get_price_columns(df):
-            aggregations[col] = ['mean', 'std', 'min', 'max']
-
-        stats = df.groupby('zona_carga').agg(aggregations).round(2)
-
+        }).round(2)
+        
         # Flatten column names
         stats.columns = ['_'.join(col).strip() for col in stats.columns.values]
-
+        
         # Calculate additional metrics
-        if 'demanda_mean' in stats.columns and 'demanda_max' in stats.columns:
-            load_factor = stats['demanda_mean'] / stats['demanda_max'] * 100
-            stats['load_factor'] = load_factor.replace([np.inf, -np.inf], np.nan).round(2)
-        if 'demanda_std' in stats.columns and 'demanda_mean' in stats.columns:
-            cv = stats['demanda_std'] / stats['demanda_mean'] * 100
-            stats['cv'] = cv.replace([np.inf, -np.inf], np.nan).round(2)
-
+        stats['load_factor'] = (stats['demanda_mean'] / stats['demanda_max'] * 100).round(2)
+        stats['cv'] = (stats['demanda_std'] / stats['demanda_mean'] * 100).round(2)  # Coefficient of variation
+        
         return stats
     
     def get_daily_summary(self) -> pd.DataFrame:
@@ -354,15 +275,10 @@ class DataAssembler:
         
         df = self.data
         
-        aggregations: Dict[str, List[str]] = {
+        daily = df.groupby([df['fecha'].dt.date, 'sistema', 'zona_carga']).agg({
             'demanda': ['mean', 'max', 'min', 'sum']
-        }
-
-        for col in self._get_price_columns(df):
-            aggregations[col] = ['mean', 'max', 'min']
-
-        daily = df.groupby([df['fecha'].dt.date, 'sistema', 'zona_carga']).agg(aggregations).round(2)
-
+        }).round(2)
+        
         # Flatten column names
         daily.columns = ['_'.join(col).strip() for col in daily.columns.values]
         
@@ -378,14 +294,9 @@ class DataAssembler:
         if zona:
             df = df[df['zona_carga'] == zona]
         
-        aggregations: Dict[str, List[str]] = {
+        hourly = df.groupby(['hora', 'day_type']).agg({
             'demanda': ['mean', 'std']
-        }
-
-        for col in self._get_price_columns(df):
-            aggregations[col] = ['mean', 'std']
-
-        hourly = df.groupby(['hora', 'day_type']).agg(aggregations).round(2)
+        }).round(2)
         
         # Flatten column names
         hourly.columns = ['_'.join(col).strip() for col in hourly.columns.values]
@@ -485,30 +396,19 @@ class DataAssembler:
         
         df = self.data
         
-        price_columns = self._get_price_columns(df)
-
         report = {
             'total_records': len(df),
             'complete_records': len(df.dropna()),
-            'complete_demand_records': int(df['demanda'].notna().sum()),
-            'complete_price_records': {col: int(df[col].notna().sum()) for col in price_columns},
             'missing_values': df.isnull().sum().to_dict(),
             'duplicate_records': df.duplicated().sum(),
-            'demand_anomalies': df.get('is_demand_anomaly', pd.Series([False])).sum(),
-            'price_anomalies': df.get('is_price_anomaly', pd.Series([False])).sum(),
-            'zero_demand_records': int((df['demanda'] == 0).sum()),
-            'negative_demand_records': int((df['demanda'] < 0).sum()),
-            'zero_price_records': {col: int((df[col] == 0).sum()) for col in price_columns},
+            'anomalies': df.get('is_anomaly', pd.Series([False])).sum(),
+            'zero_demand_records': (df['demanda'] == 0).sum(),
+            'negative_demand_records': (df['demanda'] < 0).sum(),
             'date_range_consistency': {
                 'expected_hours': ((df['fecha'].max() - df['fecha'].min()).days + 1) * 24,
                 'actual_records_per_zone': len(df) / df['zona_carga'].nunique() if df['zona_carga'].nunique() > 0 else 0
             },
-            'zones_with_gaps': [],
-            'price_columns': price_columns,
-            'help_text': (
-                "Report covers demand and price completeness, zero-value counts, "
-                "and anomaly detection for both metrics."
-            )
+            'zones_with_gaps': []
         }
         
         # Check for gaps in data
