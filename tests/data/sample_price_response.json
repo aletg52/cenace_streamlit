@@ -1,0 +1,28 @@
+{
+  "Resultados": {
+    "Precios": [
+      {
+        "sistema": "BCS",
+        "zona_carga": "LA PAZ",
+        "valores": [
+          {
+            "fecha": "2024-01-01",
+            "hora": 1,
+            "precio_total": 120.5,
+            "componente_energia": 100.0,
+            "componente_congestion": 10.0,
+            "componente_perdidas": 10.5
+          },
+          {
+            "fecha": "2024-01-01",
+            "hora": 2,
+            "precio_total": 118.3,
+            "componente_energia": 98.0,
+            "componente_congestion": 9.5,
+            "componente_perdidas": 10.8
+          }
+        ]
+      }
+    ]
+  }
+}

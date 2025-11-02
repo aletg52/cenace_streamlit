@@ -8,6 +8,17 @@ Verify that all components are working correctly
 import sys
 from datetime import datetime, timedelta
 import json
+from pathlib import Path
+
+
+FIXTURE_DIR = Path(__file__).parent / "tests" / "data"
+
+
+def load_fixture(name: str) -> str:
+    """Load fixture file from disk"""
+    path = FIXTURE_DIR / name
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
 
 def test_imports():
     """Test that all modules can be imported"""
@@ -144,9 +155,68 @@ def test_client_initialization():
         
         print("✅ Client initialization tests passed")
         return True
-        
+
     except Exception as e:
         print(f"❌ Client test error: {e}")
+        return False
+
+def test_price_parser():
+    """Test zonal price parser"""
+    print("\nTesting price parser...")
+    try:
+        from cenace_downloader import CENACEClient
+
+        client = CENACEClient(cache_enabled=False)
+        sample_json = load_fixture('sample_price_response.json')
+        records = client._parse_price_response(sample_json)
+
+        assert len(records) == 2, "Should parse two price records"
+        first = records[0]
+        assert first['precio_total'] == 120.5, "Should parse precio_total"
+        assert 'componente_energia' in first, "Should extract component fields"
+
+        print("✅ Price parser tests passed")
+        return True
+
+    except Exception as e:
+        print(f"❌ Price parser test error: {e}")
+        return False
+
+def test_combined_downloader():
+    """Test combined demand and price download orchestration"""
+    print("\nTesting combined downloader...")
+    try:
+        from cenace_downloader import CENACEClient
+
+        client = CENACEClient(cache_enabled=False)
+        demand_xml = load_fixture('sample_demand_response.xml')
+        price_json = load_fixture('sample_price_response.json')
+
+        def fake_make_request(url, expected_format="XML"):
+            if "SWPEND" in url:
+                return price_json
+            return demand_xml
+
+        client._make_request = fake_make_request  # type: ignore
+
+        data = client.download_data(
+            system='BCS',
+            zones=['LA PAZ'],
+            start_date=datetime(2024, 1, 1).date(),
+            end_date=datetime(2024, 1, 1).date(),
+            data_type='combined'
+        )
+
+        assert len(data) == 2, "Should return two merged records"
+        for record in data:
+            assert 'demanda' in record, "Merged record should contain demand"
+            assert 'precio_total' in record, "Merged record should contain price"
+
+        print("✅ Combined downloader tests passed")
+        return True
+
+    except Exception as e:
+        print(f"❌ Combined downloader test error: {e}")
         return False
 
 def test_assembler():
@@ -165,14 +235,18 @@ def test_assembler():
                 'zona_carga': 'LA PAZ',
                 'fecha': '2024-01-01',
                 'hora': 1,
-                'demanda': 150.5
+                'demanda': 150.5,
+                'precio_total': 120.5,
+                'componente_energia': 100.0
             },
             {
                 'sistema': 'BCS',
                 'zona_carga': 'LA PAZ',
                 'fecha': '2024-01-01',
                 'hora': 2,
-                'demanda': 145.2
+                'demanda': 145.2,
+                'precio_total': 118.3,
+                'componente_energia': 98.0
             }
         ]
         
@@ -226,6 +300,8 @@ def main():
         test_zones,
         test_utils,
         test_client_initialization,
+        test_price_parser,
+        test_combined_downloader,
         test_assembler,
         test_integration
     ]
