@@ -64,8 +64,6 @@ if 'progress_text' not in st.session_state:
     st.session_state.progress_text = ""
 if 'data_refresh_key' not in st.session_state:
     st.session_state.data_refresh_key = 0
-if 'selected_process' not in st.session_state:
-    st.session_state.selected_process = "MDA"
 # Note: We don't use pending_rerun anymore - widget interactions handle reruns naturally
 
 # Header
@@ -175,8 +173,12 @@ with st.sidebar:
     # Advanced Options
     st.subheader("3️⃣ Advanced Options")
     
-    # Note: We download both MDA and MTR, toggle is in tabs
-    st.info("ℹ️ Both MDA and MTR data will be downloaded. Use the toggle in each tab to switch between them.")
+    process_type = st.selectbox(
+        "Process Type",
+        ["MDA"],
+        help="MDA: Mercado del Día en Adelanto",
+        key="process_type_selectbox"
+    )
     
     # API Settings (with best practices)
     with st.expander("⚙️ API Settings"):
@@ -233,35 +235,10 @@ with main_container:
     # Create tabs for different views
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "📈 Visualizations", "📁 Downloads", "ℹ️ Help"])
     
-    # Process type toggle - available at top of each tab
-    def render_process_toggle(tab_name):
-        """Render the process type toggle button"""
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            process_options = ["MDA", "MTR"]
-            current_idx = 0 if st.session_state.selected_process == "MDA" else 1
-            selected = st.radio(
-                "Select Process Type",
-                options=process_options,
-                index=current_idx,
-                horizontal=True,
-                key=f"process_toggle_radio_{tab_name}"
-            )
-            st.session_state.selected_process = selected
-            return selected
-    
     with tab1:
-        # Process type toggle
-        selected_process = render_process_toggle("dashboard")
-        st.markdown("---")
-        
         # Dashboard Tab - Always read fresh from session state
         # Use .get() to ensure we're reading the current value, not a cached reference
         df = st.session_state.get('download_data')
-        
-        # Filter by process type if available
-        if df is not None and not df.empty and 'process' in df.columns:
-            df = df[df['process'] == selected_process].copy()
         
         # Check if we have valid data
         has_valid_data = (df is not None and 
@@ -364,17 +341,8 @@ with main_container:
                 st.dataframe(preview_df.head(preview_limit), use_container_width=True)
     
     with tab2:
-        # Process type toggle
-        selected_process = render_process_toggle("visualizations")
-        st.markdown("---")
-        
         # Visualizations Tab - Always get fresh data from session state
         df = st.session_state.get('download_data', None)
-        
-        # Filter by process type if available
-        if df is not None and not df.empty and 'process' in df.columns:
-            df = df[df['process'] == selected_process].copy()
-        
         # Check for all required columns including 'fecha' and 'datetime'
         has_valid_data = (df is not None and 
                          hasattr(df, 'empty') and 
@@ -515,18 +483,10 @@ with main_container:
             st.info("📊 Download data first to see visualizations")
     
     with tab3:
-        # Process type toggle
-        selected_process = render_process_toggle("downloads")
-        st.markdown("---")
-        
         # Downloads Tab - Always get fresh data from session state
         df = None
         if 'download_data' in st.session_state and st.session_state.download_data is not None:
             df = st.session_state.download_data.copy() if hasattr(st.session_state.download_data, 'copy') else st.session_state.download_data
-        
-        # Filter by process type if available
-        if df is not None and not df.empty and 'process' in df.columns:
-            df = df[df['process'] == selected_process].copy()
         
         # Check for all required columns
         has_valid_data = (df is not None and 
@@ -550,9 +510,9 @@ with main_container:
                 csv_data = csv_buffer.getvalue()
                 
                 st.download_button(
-                    label=f"⬇️ Download All {selected_process} Data (CSV)",
+                    label="⬇️ Download All Data (CSV)",
                     data=csv_data,
-                    file_name=f"cenace_{selected_process}_data_{start_date}_{end_date}.csv",
+                    file_name=f"cenace_data_{start_date}_{end_date}.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
@@ -570,9 +530,9 @@ with main_container:
                         zipf.writestr(f"{zone.replace(' ', '_')}.csv", csv_buffer.getvalue())
                 
                 st.download_button(
-                    label=f"⬇️ Download ZIP (Individual CSVs - {selected_process})",
+                    label="⬇️ Download ZIP (Individual CSVs)",
                     data=zip_buffer.getvalue(),
-                    file_name=f"cenace_{selected_process}_zones_{start_date}_{end_date}.zip",
+                    file_name=f"cenace_zones_{start_date}_{end_date}.zip",
                     mime="application/zip",
                     use_container_width=True
                 )
@@ -601,9 +561,9 @@ with main_container:
                         daily_summary.to_excel(writer, sheet_name='Daily Summary')
                 
                 st.download_button(
-                    label=f"⬇️ Download Excel Report ({selected_process})",
+                    label="⬇️ Download Excel Report",
                     data=excel_buffer.getvalue(),
-                    file_name=f"cenace_{selected_process}_report_{start_date}_{end_date}.xlsx",
+                    file_name=f"cenace_report_{start_date}_{end_date}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
@@ -624,9 +584,9 @@ with main_container:
                 zone_df.to_csv(csv_buffer, index=False)
                 
                 st.download_button(
-                    label=f"⬇️ Download {zone_to_download} Data ({selected_process})",
+                    label=f"⬇️ Download {zone_to_download} Data",
                     data=csv_buffer.getvalue(),
-                    file_name=f"cenace_{selected_process}_{zone_to_download.replace(' ', '_')}_{start_date}_{end_date}.csv",
+                    file_name=f"cenace_{zone_to_download.replace(' ', '_')}_{start_date}_{end_date}.csv",
                     mime="text/csv"
                 )
             else:
@@ -659,7 +619,6 @@ with main_container:
         - `hora`: Hour (1-24)
         - `demanda`: Demand in MW
         - `datetime`: Combined date and time
-        - `process`: Process type (MDA: Mercado del Día en Adelanto, MTR: Mercado de Tiempo Real)
         
         **4. Caching:**
         - Data is cached for 24 hours to improve performance
@@ -718,49 +677,37 @@ if download_button:
                     zones_by_system[system] = []
                 zones_by_system[system].append(zone)
             
-            # Calculate total operations for progress tracking (doubled for MDA and MTR)
+            # Calculate total operations for progress tracking
             total_operations = 0
             for system, zones in zones_by_system.items():
                 num_batches = (len(zones) + 9) // 10  # Ceiling division for 10-zone batches
                 num_weeks = ((end_date - start_date).days + 6) // 7  # Ceiling division for 7-day chunks
-                total_operations += num_batches * num_weeks * 2  # Multiply by 2 for MDA and MTR
+                total_operations += num_batches * num_weeks
             
             current_operation = 0
             all_data = []
             
-            # Download data for each system and both process types
-            process_types = ["MDA", "MTR"]
-            
-            for process_type in process_types:
-                status_text.text(f"Downloading {process_type} data...")
+            # Download data for each system
+            for system, zones in zones_by_system.items():
+                status_text.text(f"Processing system: {system}")
                 
-                for system, zones in zones_by_system.items():
-                    detail_text.text(f"Processing {process_type} - System: {system}")
-                    
-                    # Create a closure-safe callback for this process type
-                    def make_callback(pt, op_start):
-                        def callback(current, total, msg):
-                            progress_bar.progress(min((op_start + current) / total_operations, 1.0))
-                            detail_text.text(f"{pt}: {msg}")
-                        return callback
-                    
-                    # Download data in batches
-                    system_data = client.download_data(
-                        system=system,
-                        zones=zones,
-                        start_date=start_date,
-                        end_date=end_date,
-                        process=process_type,
-                        progress_callback=make_callback(process_type, current_operation)
-                    )
-                    
-                    # Add process type to each record
-                    if system_data:
-                        for record in system_data:
-                            record['process'] = process_type
-                        all_data.extend(system_data)
-                    
-                    current_operation += len(zones) * ((end_date - start_date).days + 6) // 7
+                # Download data in batches
+                system_data = client.download_data(
+                    system=system,
+                    zones=zones,
+                    start_date=start_date,
+                    end_date=end_date,
+                    process=process_type,
+                    progress_callback=lambda current, total, msg: [
+                        progress_bar.progress(min((current_operation + current) / total_operations, 1.0)),
+                        detail_text.text(msg)
+                    ]
+                )
+                
+                if system_data:
+                    all_data.extend(system_data)
+                
+                current_operation += len(zones) * ((end_date - start_date).days + 6) // 7
             
             # Assemble final dataframe
             status_text.text("Assembling final dataset...")
@@ -776,11 +723,7 @@ if download_button:
             # Clear progress indicators
             progress_bar.progress(1.0)
             status_text.text("✅ Download complete!")
-            if 'process' in final_df.columns:
-                process_counts = final_df['process'].value_counts().to_dict()
-                detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems - MDA: {process_counts.get('MDA', 0):,}, MTR: {process_counts.get('MTR', 0):,}")
-            else:
-                detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
+            detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
             
         except Exception as e:
             st.error(f"""
@@ -803,15 +746,9 @@ if st.session_state.get('download_complete', False):
     df = st.session_state.get('download_data', None)
     if df is not None and not df.empty and 'fecha' in df.columns and 'zona_carga' in df.columns:
         st.markdown("---")
-        # Show process type breakdown if available
-        process_info = ""
-        if 'process' in df.columns:
-            process_counts = df['process'].value_counts().to_dict()
-            process_info = f"\n        - Process Types: MDA: {process_counts.get('MDA', 0):,} records, MTR: {process_counts.get('MTR', 0):,} records"
-        
         st.success(f"""
         ✅ **Download Complete!**
-        - Total Records: {len(df):,}{process_info}
+        - Records: {len(df):,}
         - Zones: {len(df['zona_carga'].unique())}
         - Date Range: {df['fecha'].min().date()} to {df['fecha'].max().date()}
         """)
