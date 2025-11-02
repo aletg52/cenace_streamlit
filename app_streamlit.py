@@ -67,8 +67,8 @@ if 'data_refresh_key' not in st.session_state:
 # Note: We don't use pending_rerun anymore - widget interactions handle reruns naturally
 
 # Header
-st.title("⚡ CENACE Demand Data Downloader")
-st.markdown("### Download Mexico's electrical demand data from CENACE's web service")
+st.title("⚡ CENACE Demand & Price Downloader")
+st.markdown("### Download Mexico's electrical demand and zonal price data from CENACE's web services")
 
 # Sidebar for configuration
 with st.sidebar:
@@ -206,7 +206,7 @@ with st.sidebar:
         )
     
     # Download button
-    st.subheader("4️⃣ Download Data")
+    st.subheader("4️⃣ Download Demand & Price Data")
     
     if len(selected_zones) == 0:
         st.warning("⚠️ Please select at least one zone")
@@ -218,7 +218,7 @@ with st.sidebar:
             date_diff + 1,
             delay_between_requests
         )
-        st.info(f"⏱️ Estimated time: {estimated_time}")
+        st.info(f"⏱️ Estimated time (demand + prices): {estimated_time}")
         download_disabled = False
     
     download_button = st.button(
@@ -250,21 +250,21 @@ with main_container:
         if not has_valid_data:
             # Show instructions when no data
             st.markdown("""
-            ### 👋 Welcome to CENACE Demand Downloader
+            ### 👋 Welcome to the CENACE Demand & Price Downloader
             
             **Quick Start:**
             1. Select zones from the sidebar (up to 10)
             2. Choose your date range
-            3. Click "Start Download"
-            4. View and download your data
+            3. Click "Start Download" to retrieve demand **and** zonal prices
+            4. View, analyze, and export your merged dataset
             
             **Features:**
             - ✅ Mix zones from different systems
             - ✅ Automatic 7-day chunking for API limits
             - ✅ Smart caching to avoid duplicate requests
             - ✅ Real-time progress tracking
-            - ✅ Data preview and statistics
-            - ✅ Multiple download formats
+            - ✅ Demand & price preview and statistics
+            - ✅ Multiple download formats (CSV, ZIP, Excel)
             """)
             
             # Show system information
@@ -289,10 +289,15 @@ with main_container:
                 st.warning("⚠️ No data available to display")
             else:
                 st.subheader("📊 Data Overview")
-                
+
+                price_columns = [col for col in df.columns if col.startswith('precio')]
+                primary_price_col = 'precio_total' if 'precio_total' in df.columns else (price_columns[0] if price_columns else None)
+                price_series = df[primary_price_col].dropna() if primary_price_col else pd.Series(dtype=float)
+                has_price = not price_series.empty
+
                 # Key metrics
                 col1, col2, col3, col4 = st.columns(4)
-                
+
                 with col1:
                     st.metric("Total Records", f"{len(df):,}")
                 with col2:
@@ -301,24 +306,69 @@ with main_container:
                     st.metric("Zones", len(df['zona_carga'].unique()))
                 with col4:
                     st.metric("Systems", len(df['sistema'].unique()))
+
+                if has_price:
+                    col5, col6, col7 = st.columns(3)
+                    avg_price = price_series.mean()
+                    max_price = price_series.max()
+                    min_price = price_series.min()
+                    price_spread = max_price - min_price
+
+                    with col5:
+                        st.metric("Average Price (MXN/MWh)", f"{avg_price:,.2f}")
+                    with col6:
+                        st.metric("Peak Price (MXN/MWh)", f"{max_price:,.2f}")
+                    with col7:
+                        st.metric("Price Spread", f"{price_spread:,.2f}")
                 
                 # Statistics by zone
                 st.subheader("📈 Zone Statistics")
-                
-                zone_stats = df.groupby('zona_carga').agg({
+
+                agg_map = {
                     'demanda': ['mean', 'max', 'min', 'std'],
                     'fecha': 'count'
-                }).round(2)
-                
-                zone_stats.columns = ['Avg Demand (MW)', 'Peak Demand (MW)', 
-                                     'Min Demand (MW)', 'Std Dev', 'Records']
-                zone_stats = zone_stats.sort_values('Peak Demand (MW)', ascending=False)
-                
+                }
+
+                if has_price and primary_price_col:
+                    agg_map[primary_price_col] = ['mean', 'max', 'min']
+
+                zone_stats = df.groupby('zona_carga').agg(agg_map).round(2)
+
+                if has_price and primary_price_col:
+                    price_spread = (zone_stats[(primary_price_col, 'max')] - zone_stats[(primary_price_col, 'min')]).round(2)
+                    zone_stats[(primary_price_col, 'spread')] = price_spread
+
+                rename_map = {
+                    ('demanda', 'mean'): 'Avg Demand (MW)',
+                    ('demanda', 'max'): 'Peak Demand (MW)',
+                    ('demanda', 'min'): 'Min Demand (MW)',
+                    ('demanda', 'std'): 'Demand Std Dev',
+                    ('fecha', 'count'): 'Records'
+                }
+
+                if has_price and primary_price_col:
+                    rename_map.update({
+                        (primary_price_col, 'mean'): 'Avg Price (MXN/MWh)',
+                        (primary_price_col, 'max'): 'Peak Price (MXN/MWh)',
+                        (primary_price_col, 'min'): 'Min Price (MXN/MWh)',
+                        (primary_price_col, 'spread'): 'Price Spread (Max-Min)'
+                    })
+
+                def format_column(col):
+                    if isinstance(col, tuple):
+                        return rename_map.get(col, ' '.join(str(part).title() for part in col if part))
+                    return rename_map.get(col, str(col))
+
+                zone_stats.columns = [format_column(col) for col in zone_stats.columns]
+                sort_column = 'Peak Demand (MW)' if 'Peak Demand (MW)' in zone_stats.columns else zone_stats.columns[0]
+                zone_stats = zone_stats.sort_values(sort_column, ascending=False)
+
                 st.dataframe(zone_stats, use_container_width=True)
                 
                 # Data preview
                 st.subheader("🔍 Data Preview")
-                
+                st.caption("Preview includes merged demand and price data. Use filters to focus on a single zone.")
+
                 # Add filters for preview
                 col1, col2 = st.columns(2)
                 with col1:
@@ -352,133 +402,300 @@ with main_container:
                          'datetime' in df.columns)
         
         if has_valid_data:
-            
+
             st.subheader("📈 Data Visualizations")
-            
+
+            viz_df = df.copy()
+            price_columns = [col for col in viz_df.columns if col.startswith('precio')]
+            primary_price_col = 'precio_total' if 'precio_total' in viz_df.columns else (price_columns[0] if price_columns else None)
+            price_series = viz_df[primary_price_col].dropna() if primary_price_col else pd.Series(dtype=float)
+            has_price = not price_series.empty
+
             # Visualization selector
             viz_type = st.selectbox(
                 "Select Visualization",
-                ["Demand Time Series", "Daily Patterns", "Zone Comparison", 
+                ["Demand Time Series", "Daily Patterns", "Zone Comparison",
                  "Heatmap", "Peak Analysis", "Weekday vs Weekend"],
                 key="viz_type_selectbox"
             )
-            
+
             if viz_type == "Demand Time Series":
-                # Time series plot
                 zone_to_plot = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique(),
+                    viz_df['zona_carga'].unique(),
                     key="viz_zone_plot_selectbox"
                 )
-                
-                zone_df = df[df['zona_carga'] == zone_to_plot].copy()
-                
-                fig = px.line(zone_df, x='datetime', y='demanda',
-                            title=f"Demand Time Series - {zone_to_plot}",
-                            labels={'demanda': 'Demand (MW)', 'datetime': 'Date/Time'})
-                fig.update_layout(height=500)
-                st.plotly_chart(fig, use_container_width=True)
-                
-            elif viz_type == "Daily Patterns":
-                # Daily pattern analysis
-                zone_to_analyze = st.selectbox(
-                    "Select Zone",
-                    df['zona_carga'].unique(),
-                    key="viz_zone_analyze_selectbox"
-                )
-                
-                zone_df = df[df['zona_carga'] == zone_to_analyze].copy()
-                zone_df['hour'] = zone_df['datetime'].dt.hour
-                
-                hourly_avg = zone_df.groupby('hour')['demanda'].agg(['mean', 'std']).reset_index()
-                
+
+                zone_df = viz_df[viz_df['zona_carga'] == zone_to_plot].copy()
+                zone_df = zone_df.sort_values('datetime')
+
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
-                    x=hourly_avg['hour'],
-                    y=hourly_avg['mean'],
-                    mode='lines+markers',
-                    name='Average',
-                    line=dict(color='blue', width=3)
-                ))
-                fig.add_trace(go.Scatter(
-                    x=hourly_avg['hour'],
-                    y=hourly_avg['mean'] + hourly_avg['std'],
+                    x=zone_df['datetime'],
+                    y=zone_df['demanda'],
                     mode='lines',
-                    name='Upper Bound',
-                    line=dict(color='lightblue', dash='dash')
+                    name='Demand (MW)',
+                    line=dict(color='#1f77b4', width=3)
                 ))
-                fig.add_trace(go.Scatter(
-                    x=hourly_avg['hour'],
-                    y=hourly_avg['mean'] - hourly_avg['std'],
-                    mode='lines',
-                    name='Lower Bound',
-                    line=dict(color='lightblue', dash='dash')
-                ))
-                
+
+                if has_price:
+                    fig.add_trace(go.Scatter(
+                        x=zone_df['datetime'],
+                        y=zone_df[primary_price_col],
+                        mode='markers',
+                        name='Price (MXN/MWh)',
+                        marker=dict(color='#ff7f0e', size=6),
+                        yaxis='y2'
+                    ))
+
                 fig.update_layout(
-                    title=f"Daily Demand Pattern - {zone_to_analyze}",
-                    xaxis_title="Hour of Day",
-                    yaxis_title="Demand (MW)",
-                    height=500
+                    title=f"Demand & Price Time Series - {zone_to_plot}",
+                    xaxis_title="Date/Time",
+                    yaxis=dict(title='Demand (MW)'),
+                    yaxis2=dict(title='Price (MXN/MWh)', overlaying='y', side='right', showgrid=False),
+                    height=500,
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
                 )
                 st.plotly_chart(fig, use_container_width=True)
-                
-            elif viz_type == "Zone Comparison":
-                # Zone comparison box plot
-                fig = px.box(df, x='zona_carga', y='demanda',
-                           title="Demand Distribution by Zone",
-                           labels={'demanda': 'Demand (MW)', 'zona_carga': 'Zone'})
-                fig.update_layout(height=500)
+
+            elif viz_type == "Daily Patterns":
+                zone_to_analyze = st.selectbox(
+                    "Select Zone",
+                    viz_df['zona_carga'].unique(),
+                    key="viz_zone_analyze_selectbox"
+                )
+
+                zone_df = viz_df[viz_df['zona_carga'] == zone_to_analyze].copy()
+                zone_df['hour'] = zone_df['datetime'].dt.hour
+
+                agg_dict = {'demanda': ['mean', 'std']}
+                if has_price and primary_price_col:
+                    agg_dict[primary_price_col] = ['mean']
+
+                hourly_stats = zone_df.groupby('hour').agg(agg_dict).sort_index()
+
+                demand_mean = hourly_stats[('demanda', 'mean')]
+                demand_std = hourly_stats[('demanda', 'std')].fillna(0)
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=demand_mean.index,
+                    y=demand_mean,
+                    mode='lines',
+                    name='Average Demand (MW)',
+                    line=dict(color='#1f77b4', width=3)
+                ))
+                fig.add_trace(go.Scatter(
+                    x=demand_mean.index,
+                    y=demand_mean + demand_std,
+                    mode='lines',
+                    name='Demand Upper Bound',
+                    line=dict(color='#1f77b4', dash='dash')
+                ))
+                fig.add_trace(go.Scatter(
+                    x=demand_mean.index,
+                    y=demand_mean - demand_std,
+                    mode='lines',
+                    name='Demand Lower Bound',
+                    line=dict(color='#1f77b4', dash='dash')
+                ))
+
+                if has_price and primary_price_col:
+                    price_mean = hourly_stats[(primary_price_col, 'mean')]
+                    fig.add_trace(go.Scatter(
+                        x=price_mean.index,
+                        y=price_mean,
+                        mode='markers',
+                        name='Average Price (MXN/MWh)',
+                        marker=dict(color='#ff7f0e', size=8),
+                        yaxis='y2'
+                    ))
+
+                fig.update_layout(
+                    title=f"Daily Demand & Price Pattern - {zone_to_analyze}",
+                    xaxis_title="Hour of Day",
+                    yaxis=dict(title='Demand (MW)'),
+                    yaxis2=dict(title='Price (MXN/MWh)', overlaying='y', side='right', showgrid=False),
+                    height=500,
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+                )
                 st.plotly_chart(fig, use_container_width=True)
-                
+
+            elif viz_type == "Zone Comparison":
+                zone_order = list(viz_df['zona_carga'].unique())
+
+                fig = go.Figure()
+                fig.add_trace(go.Box(
+                    x=viz_df['zona_carga'],
+                    y=viz_df['demanda'],
+                    name='Demand (MW)',
+                    marker_color='#1f77b4',
+                    boxmean=True
+                ))
+
+                if has_price and primary_price_col:
+                    price_summary = (
+                        viz_df.groupby('zona_carga')[primary_price_col]
+                        .mean()
+                        .reindex(zone_order)
+                        .reset_index()
+                        .dropna(subset=[primary_price_col])
+                    )
+                    if not price_summary.empty:
+                        fig.add_trace(go.Scatter(
+                            x=price_summary['zona_carga'],
+                            y=price_summary[primary_price_col],
+                            mode='markers',
+                            name='Avg Price (MXN/MWh)',
+                            marker=dict(color='#ff7f0e', size=10, symbol='diamond'),
+                            yaxis='y2'
+                        ))
+
+                fig.update_layout(
+                    title="Demand Distribution & Price by Zone",
+                    xaxis=dict(title='Zone', categoryorder='array', categoryarray=zone_order),
+                    yaxis=dict(title='Demand (MW)'),
+                    yaxis2=dict(title='Price (MXN/MWh)', overlaying='y', side='right', showgrid=False),
+                    height=500,
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
             elif viz_type == "Heatmap":
-                # Create hourly heatmap
                 zone_for_heatmap = st.selectbox(
                     "Select Zone",
-                    df['zona_carga'].unique(),
+                    viz_df['zona_carga'].unique(),
                     key="viz_zone_heatmap_selectbox"
                 )
-                
-                zone_df = df[df['zona_carga'] == zone_for_heatmap].copy()
+
+                zone_df = viz_df[viz_df['zona_carga'] == zone_for_heatmap].copy()
                 zone_df['hour'] = zone_df['datetime'].dt.hour
                 zone_df['date'] = zone_df['datetime'].dt.date
-                
-                pivot = zone_df.pivot_table(values='demanda', index='hour', columns='date', aggfunc='mean')
-                
-                fig = px.imshow(pivot,
-                             labels=dict(x="Date", y="Hour", color="Demand (MW)"),
-                             title=f"Demand Heatmap - {zone_for_heatmap}",
-                             color_continuous_scale="RdYlGn_r",
-                             aspect="auto")
-                fig.update_layout(height=600)
-                st.plotly_chart(fig, use_container_width=True)
-                
+
+                heatmap_tabs = ["Demand Heatmap"] + (["Price Heatmap"] if has_price and primary_price_col else [])
+                heatmap_containers = st.tabs(heatmap_tabs)
+
+                demand_pivot = zone_df.pivot_table(values='demanda', index='hour', columns='date', aggfunc='mean')
+                with heatmap_containers[0]:
+                    fig = px.imshow(
+                        demand_pivot,
+                        labels=dict(x="Date", y="Hour", color="Demand (MW)"),
+                        title=f"Demand Heatmap - {zone_for_heatmap}",
+                        color_continuous_scale="RdYlGn_r",
+                        aspect="auto"
+                    )
+                    fig.update_layout(height=600)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                if has_price and primary_price_col:
+                    price_pivot = zone_df.pivot_table(values=primary_price_col, index='hour', columns='date', aggfunc='mean')
+                    with heatmap_containers[1]:
+                        if price_pivot.empty or price_pivot.dropna(how='all').empty:
+                            st.info("No price data available for the selected zone/date range.")
+                        else:
+                            fig_price = px.imshow(
+                                price_pivot,
+                                labels=dict(x="Date", y="Hour", color="Price (MXN/MWh)"),
+                                title=f"Price Heatmap - {zone_for_heatmap}",
+                                color_continuous_scale="Viridis",
+                                aspect="auto"
+                            )
+                            fig_price.update_layout(height=600)
+                            st.plotly_chart(fig_price, use_container_width=True)
+
             elif viz_type == "Peak Analysis":
-                # Peak demand analysis
-                daily_peaks = df.groupby([df['fecha'].dt.date, 'zona_carga'])['demanda'].max().reset_index()
-                daily_peaks.columns = ['date', 'zona_carga', 'peak_demand']
-                
-                fig = px.line(daily_peaks, x='date', y='peak_demand', color='zona_carga',
-                           title="Daily Peak Demand by Zone",
-                           labels={'peak_demand': 'Peak Demand (MW)', 'date': 'Date'})
-                fig.update_layout(height=500)
+                demand_peaks = viz_df.groupby([viz_df['fecha'].dt.date, 'zona_carga'])['demanda'].max().reset_index()
+                demand_peaks.columns = ['date', 'zona_carga', 'peak_demand']
+
+                fig = go.Figure()
+                for zone in demand_peaks['zona_carga'].unique():
+                    zone_peaks = demand_peaks[demand_peaks['zona_carga'] == zone]
+                    fig.add_trace(go.Scatter(
+                        x=zone_peaks['date'],
+                        y=zone_peaks['peak_demand'],
+                        mode='lines',
+                        name=f"{zone} Demand",
+                        legendgroup=zone,
+                        line=dict(width=2)
+                    ))
+
+                if has_price and primary_price_col:
+                    price_peaks = viz_df.groupby([viz_df['fecha'].dt.date, 'zona_carga'])[primary_price_col].max().reset_index()
+                    price_peaks.columns = ['date', 'zona_carga', 'peak_price']
+                    price_peaks = price_peaks.dropna(subset=['peak_price'])
+                    for zone in price_peaks['zona_carga'].unique():
+                        zone_prices = price_peaks[price_peaks['zona_carga'] == zone]
+                        fig.add_trace(go.Scatter(
+                            x=zone_prices['date'],
+                            y=zone_prices['peak_price'],
+                            mode='markers',
+                            name=f"{zone} Price",
+                            legendgroup=zone,
+                            marker=dict(size=8, color='#ff7f0e'),
+                            yaxis='y2'
+                        ))
+
+                fig.update_layout(
+                    title="Daily Peak Demand & Price by Zone",
+                    xaxis_title="Date",
+                    yaxis=dict(title='Peak Demand (MW)'),
+                    yaxis2=dict(title='Peak Price (MXN/MWh)', overlaying='y', side='right', showgrid=False),
+                    height=500,
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+                )
                 st.plotly_chart(fig, use_container_width=True)
-                
+
             elif viz_type == "Weekday vs Weekend":
-                # Weekday vs Weekend analysis
-                df['weekday'] = df['datetime'].dt.weekday
-                df['is_weekend'] = df['weekday'].isin([5, 6])
-                df['day_type'] = df['is_weekend'].map({True: 'Weekend', False: 'Weekday'})
-                
-                comparison = df.groupby(['zona_carga', 'day_type'])['demanda'].agg(['mean', 'max']).reset_index()
-                
-                fig = px.bar(comparison, x='zona_carga', y='mean', color='day_type',
-                          barmode='group',
-                          title="Weekday vs Weekend Average Demand",
-                          labels={'mean': 'Average Demand (MW)', 'zona_carga': 'Zone'})
-                fig.update_layout(height=500)
+                comparison_df = viz_df.copy()
+                comparison_df['weekday'] = comparison_df['datetime'].dt.weekday
+                comparison_df['day_type'] = comparison_df['weekday'].isin([5, 6]).map({True: 'Weekend', False: 'Weekday'})
+
+                agg_map = {'demanda': 'mean'}
+                if has_price and primary_price_col:
+                    agg_map[primary_price_col] = 'mean'
+
+                comparison = comparison_df.groupby(['zona_carga', 'day_type']).agg(agg_map).reset_index()
+
+                fig = go.Figure()
+                for idx, day_type in enumerate(sorted(comparison['day_type'].unique())):
+                    subset = comparison[comparison['day_type'] == day_type]
+                    fig.add_trace(go.Bar(
+                        x=subset['zona_carga'],
+                        y=subset['demanda'],
+                        name=f"{day_type} Demand",
+                        offsetgroup=idx,
+                        marker_color='#1f77b4' if day_type == 'Weekday' else '#2ca02c',
+                        legendgroup=day_type
+                    ))
+
+                if has_price and primary_price_col:
+                    for idx, day_type in enumerate(sorted(comparison['day_type'].unique())):
+                        subset = comparison[comparison['day_type'] == day_type]
+                        subset = subset.dropna(subset=[primary_price_col])
+                        if subset.empty:
+                            continue
+                        fig.add_trace(go.Scatter(
+                            x=subset['zona_carga'],
+                            y=subset[primary_price_col],
+                            mode='markers',
+                            name=f"{day_type} Price",
+                            marker=dict(size=9, symbol='diamond', color='#ff7f0e'),
+                            yaxis='y2',
+                            legendgroup=day_type,
+                            offsetgroup=idx
+                        ))
+
+                fig.update_layout(
+                    title="Weekday vs Weekend Demand & Price",
+                    xaxis_title="Zone",
+                    yaxis=dict(title='Average Demand (MW)'),
+                    yaxis2=dict(title='Average Price (MXN/MWh)', overlaying='y', side='right', showgrid=False),
+                    barmode='group',
+                    height=500,
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+                )
                 st.plotly_chart(fig, use_container_width=True)
-                
+
         else:
             st.info("📊 Download data first to see visualizations")
     
@@ -496,15 +713,21 @@ with main_container:
                          'fecha' in df.columns)
         
         if has_valid_data:
-            
+
             st.subheader("📁 Download Options")
-            
+            st.caption("All exports include hourly demand and zonal price fields.")
+
+            price_columns = [col for col in df.columns if col.startswith('precio')]
+            primary_price_col = 'precio_total' if 'precio_total' in df.columns else (price_columns[0] if price_columns else None)
+            price_series = df[primary_price_col].dropna() if primary_price_col else pd.Series(dtype=float)
+            has_price = not price_series.empty
+
             # Prepare different download formats
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
                 # Combined CSV
-                st.markdown("### 📄 Combined Data")
+                st.markdown("### 📄 Combined Demand & Price Data")
                 csv_buffer = io.StringIO()
                 df.to_csv(csv_buffer, index=False)
                 csv_data = csv_buffer.getvalue()
@@ -540,26 +763,40 @@ with main_container:
             with col3:
                 # Excel file with analysis
                 st.markdown("### 📊 Excel with Analysis")
-                
+
                 excel_buffer = io.BytesIO()
                 with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
                     # Raw data
                     df.to_excel(writer, sheet_name='Raw Data', index=False)
-                    
+
                     # Zone statistics (calculate here)
                     if 'demanda' in df.columns:
                         zone_stats = df.groupby('zona_carga')['demanda'].agg(['mean', 'max', 'min', 'std', 'count']).round(2)
-                        zone_stats.columns = ['Avg Demand (MW)', 'Peak Demand (MW)', 
+                        zone_stats.columns = ['Avg Demand (MW)', 'Peak Demand (MW)',
                                              'Min Demand (MW)', 'Std Dev', 'Records']
                         zone_stats.to_excel(writer, sheet_name='Zone Statistics')
-                    
+
+                    if has_price and primary_price_col:
+                        price_stats = df.groupby('zona_carga')[primary_price_col].agg(['mean', 'max', 'min', 'std']).round(2)
+                        price_stats.columns = ['Avg Price (MXN/MWh)', 'Peak Price (MXN/MWh)',
+                                               'Min Price (MXN/MWh)', 'Price Std Dev']
+                        price_stats['Price Spread (Max-Min)'] = (price_stats['Peak Price (MXN/MWh)'] - price_stats['Min Price (MXN/MWh)']).round(2)
+                        price_stats.to_excel(writer, sheet_name='Price Statistics')
+
                     # Daily summary (only if fecha exists and is datetime)
                     if 'fecha' in df.columns and pd.api.types.is_datetime64_any_dtype(df['fecha']):
-                        daily_summary = df.groupby(df['fecha'].dt.date).agg({
-                            'demanda': ['mean', 'max', 'min', 'sum']
-                        }).round(2)
+                        agg_map = {'demanda': ['mean', 'max', 'min', 'sum']}
+                        if has_price and primary_price_col:
+                            agg_map[primary_price_col] = ['mean', 'max', 'min']
+
+                        daily_summary = df.groupby(df['fecha'].dt.date).agg(agg_map).round(2)
+                        # Flatten columns for Excel readability
+                        daily_summary.columns = [
+                            ' '.join(str(part).replace('_', ' ').title() for part in col if part)
+                            for col in daily_summary.columns
+                        ]
                         daily_summary.to_excel(writer, sheet_name='Daily Summary')
-                
+
                 st.download_button(
                     label="⬇️ Download Excel Report",
                     data=excel_buffer.getvalue(),
@@ -618,6 +855,8 @@ with main_container:
         - `fecha`: Date
         - `hora`: Hour (1-24)
         - `demanda`: Demand in MW
+        - `precio_total`: Zonal price in MXN/MWh
+        - Additional `precio_*` columns for price components (when available)
         - `datetime`: Combined date and time
         
         **4. Caching:**
@@ -629,6 +868,7 @@ with main_container:
         - Download data in weekly chunks for better performance
         - Use the delay setting to avoid overwhelming the server
         - For large date ranges, consider downloading by system
+        - Demand and price requests run together; allow extra time for large date ranges
         
         **6. Troubleshooting:**
         - **SSL Errors**: Disable SSL verification in Advanced Options
@@ -698,6 +938,7 @@ if download_button:
                     start_date=start_date,
                     end_date=end_date,
                     process=process_type,
+                    data_type="combined",
                     progress_callback=lambda current, total, msg: [
                         progress_bar.progress(min((current_operation + current) / total_operations, 1.0)),
                         detail_text.text(msg)
@@ -710,20 +951,23 @@ if download_button:
                 current_operation += len(zones) * ((end_date - start_date).days + 6) // 7
             
             # Assemble final dataframe
-            status_text.text("Assembling final dataset...")
+            status_text.text("Assembling merged demand & price dataset...")
             final_df = assembler.assemble_data(all_data)
-            
+
             # Store in session state
             st.session_state.download_data = final_df
+            st.session_state.merged_data = final_df
             st.session_state.download_complete = True
-            
+
             # Increment refresh key to ensure widgets update
             st.session_state.data_refresh_key += 1
             
             # Clear progress indicators
             progress_bar.progress(1.0)
             status_text.text("✅ Download complete!")
-            detail_text.text(f"Downloaded {len(final_df):,} records from {len(zones_by_system)} systems")
+            detail_text.text(
+                f"Downloaded {len(final_df):,} hourly records with demand and prices across {len(zones_by_system)} systems"
+            )
             
         except Exception as e:
             st.error(f"""
@@ -750,6 +994,7 @@ if st.session_state.get('download_complete', False):
         ✅ **Download Complete!**
         - Records: {len(df):,}
         - Zones: {len(df['zona_carga'].unique())}
+        - Includes hourly demand and zonal prices
         - Date Range: {df['fecha'].min().date()} to {df['fecha'].max().date()}
         """)
         
