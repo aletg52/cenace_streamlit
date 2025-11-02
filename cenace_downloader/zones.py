@@ -1,48 +1,167 @@
 """
 CENACE Zones Configuration
 ==========================
-Complete list of zones for each electrical system in Mexico
+Complete list of zones for each electrical system in Mexico, organized by Regional Control
 """
 
-# Zone definitions based on the CENACE system
-ZONES_BY_SYSTEM = {
-    "BCA": [
-        "ENSENADA",
-        "MEXICALI", 
-        "SAN LUIS",
-        "TIJUANA"
-    ],
+# Zone definitions with Regional Control aggregation
+# Structure: System -> Regional Control -> Zones
+ZONES_BY_SYSTEM_REGIONAL = {
+    "BCA": {
+        "BAJA CALIFORNIA": [
+            "ENSENADA",
+            "MEXICALI",
+            "SANLUIS",
+            "TIJUANA"
+        ]
+    },
     
-    "BCS": [
-        "CONSTITUCION",
-        "LA PAZ",
-        "LOS CABOS"
-    ],
+    "BCS": {
+        "BAJA CALIFORNIA SUR": [
+            "CONSTITUCION",
+            "LA PAZ",
+            "LOS CABOS"
+        ]
+    },
     
-    "SIN": [
-        "ACAPULCO", "AGUASCALIENTES", "APATZINGAN", "CABORCA", "CAMARGO", "CAMPECHE", "CANCUN",
-        "CANANEA", "CARMEN", "CASAS GRANDES", "CELAYA", "CENTRO", "CENTRO ORIENTE", "CENTRO SUR",
-        "CERRO AZUL", "CHARCAS", "CHETUMAL", "CHIHUAHUA", "CHILPANCINGO", "CHONTALPA", 
-        "CIENEGA", "COATZACOALCOS", "COLIMA", "CONSTITUCION DE 1857", "CORDOBA", "COSTA", 
-        "CUAUHTEMOC", "CUERNAVACA", "CULIACAN", "DELICIAS", "DURANGO", "EL FUERTE", 
-        "ESCARCEGA", "FRESNILLO", "GUADALAJARA", "GUAMUCHIL", "GUANAJUATO", "GUASAVE", 
-        "GUAYMAS", "HERMOSILLO", "HEROICA NOGALES", "HUAJUAPAN", "HUASTECA", "HUATULCO", 
-        "HUEJUTLA", "HUEXCA", "IGUALA", "IRAPUATO", "IXMIQUILPAN", "IXTEPEC", "IZUCAR", 
-        "JIQUILPAN", "JUAREZ", "JUCHITAN", "LA LAGUNA", "LA PIEDAD", "LAZARO CARDENAS", 
-        "LEON", "LOS ALTOS", "LOS MOCHIS", "LOS RIOS", "MACUSPANA", "MANZANILLO", "MATAMOROS",
-        "MATEHUALA", "MAZATLAN", "MERIDA", "MEXICALI", "MINAS", "MONCLOVA", "MONTERREY", 
-        "MORELIA", "MORELOS", "MOTUL", "NAVOJOA", "NAYARIT", "NUEVO LAREDO", "OAXACA", 
-        "OBREGON", "OCOTLAN", "ORIZABA", "PACIFICO", "PACHUCA", "PAPANTLA", "PARRAL", 
-        "PIE DE LA CUESTA", "PIEDRAS NEGRAS", "POZA RICA", "PUEBLA", "PUERTO ESCONDIDO", 
-        "PUERTO LIBERTAD", "PUERTO PENASCO", "QUERETARO", "REYNOSA", "RIVIERA MAYA", 
-        "SALAMANCA", "SALTILLO", "SAN CRISTOBAL", "SAN FERNANDO", "SAN JUAN DEL RIO", 
-        "SAN LUIS POTOSI", "SANTA ROSALIA", "SINALOA", "TABASCO", "TAMAZUNCHALE", "TAMPICO", 
-        "TAPACHULA", "TECALI", "TECATE", "TEHUACAN", "TEHUANTEPEC", "TEPIC", "TEZIUTLAN", 
-        "TICUL", "TIJUANA", "TLAXCALA", "TORREON", "TULA", "TUXPAN", "TUXTLA", 
-        "URUAPAN", "VALLADOLID", "VALLE DE MEXICO", "VERACRUZ", "VILLA CONSTITUCION", 
-        "VILLAHERMOSA", "XALAPA", "ZACATECAS", "ZAMORA", "ZAPOPAN", "ZIHUATANEJO"
-    ]
+    "SIN": {
+        "CENTRAL": [
+            "CENTRO ORIENTE",
+            "CENTRO SUR",
+            "LAZARO CARDENAS",
+            "VDM CENTRO",
+            "VDM NORTE",
+            "VDM SUR"
+        ],
+        "NORESTE": [
+            "HUASTECA",
+            "HUEJUTLA",
+            "MATAMOROS",
+            "MONCLOVA",
+            "MONTEMORELOS",
+            "MONTERREY",
+            "NUEVO LAREDO",
+            "PIEDRAS NEGRAS",
+            "REYNOSA",
+            "SABINAS",
+            "SALTILLO",
+            "TAMPICO",
+            "VICTORIA"
+        ],
+        "NOROESTE": [
+            "CABORCA",
+            "CULIACAN",
+            "GUASAVE",
+            "GUAYMAS",
+            "HERMOSILLO",
+            "LOS MOCHIS",
+            "MAZATLAN",
+            "NAVOJOA",
+            "NOGALES",
+            "OBREGON"
+        ],
+        "NORTE": [
+            "CAMARGO",
+            "CASAS GRANDES",
+            "CHIHUAHUA",
+            "CUAUHTEMOC",
+            "DURANGO",
+            "JUAREZ",
+            "LAGUNA"
+        ],
+        "OCCIDENTAL": [
+            "AGUASCALIENTES",
+            "APATZINGAN",
+            "CELAYA",
+            "CIENEGA",
+            "COLIMA",
+            "FRESNILLO",
+            "GUADALAJARA",
+            "IRAPUATO",
+            "IXMIQUILPAN",
+            "JIQUILPAN",
+            "LEON",
+            "LOS ALTOS",
+            "MANZANILLO",
+            "MATEHUALA",
+            "MINAS",
+            "MORELIA",
+            "QUERETARO",
+            "SALVATIERRA",
+            "SAN JUAN DEL RIO",
+            "SAN LUIS POTOSI",
+            "TEPIC VALLARTA",
+            "URUAPAN",
+            "ZACAPU",
+            "ZACATECAS",
+            "ZAMORA",
+            "ZAPOTLAN"
+        ],
+        "ORIENTAL": [
+            "ACAPULCO",
+            "CENTRO ORIENTE",
+            "CHILPANCINGO",
+            "CHONTALPA",
+            "COATZACOALCOS",
+            "CORDOBA",
+            "CUAUTLA",
+            "CUERNAVACA",
+            "HUAJUAPAN",
+            "HUATULCO",
+            "IGUALA",
+            "IZUCAR",
+            "LOS RIOS",
+            "LOS TUXTLAS",
+            "MORELOS",
+            "OAXACA",
+            "ORIZABA",
+            "POZA RICA",
+            "PUEBLA",
+            "SAN CRISTOBAL",
+            "SAN MARTIN",
+            "TAPACHULA",
+            "TECAMACHALCO",
+            "TEHUACAN",
+            "TEHUANTEPEC",
+            "TEZIUTLAN",
+            "TLAXCALA",
+            "TUXTLA",
+            "VERACRUZ",
+            "VILLAHERMOSA",
+            "XALAPA",
+            "ZIHUATANEJO"
+        ],
+        "PENINSULAR": [
+            "CAMPECHE",
+            "CANCUN",
+            "CARMEN",
+            "CHETUMAL",
+            "MERIDA",
+            "MOTUL TIZIMIN",
+            "RIVIERA MAYA",
+            "TICUL"
+        ]
+    }
 }
+
+# Flattened version for backward compatibility (System -> Zones list)
+# Generated automatically from the regional structure
+def _flatten_zones():
+    """Generate flattened zone structure from regional structure, removing duplicates"""
+    flattened = {}
+    for system, regional_controls in ZONES_BY_SYSTEM_REGIONAL.items():
+        all_zones = []
+        seen_zones = set()
+        for regional_control, zones in regional_controls.items():
+            for zone in zones:
+                # Add zone only if not already seen (handles duplicates across regional controls)
+                if zone.upper() not in seen_zones:
+                    all_zones.append(zone)
+                    seen_zones.add(zone.upper())
+        flattened[system] = all_zones
+    return flattened
+
+ZONES_BY_SYSTEM = _flatten_zones()
 
 # Alternative names and mappings (for data cleaning)
 ZONE_NAME_MAPPINGS = {
@@ -62,13 +181,84 @@ ZONE_NAME_MAPPINGS = {
 
 def get_all_zones():
     """
-    Get all zones organized by system
+    Get all zones organized by system (flattened structure for backward compatibility)
     
     Returns:
     --------
     Dict[str, List[str]] : Dictionary mapping system names to zone lists
     """
     return ZONES_BY_SYSTEM.copy()
+
+
+def get_all_zones_with_regional():
+    """
+    Get all zones organized by system and regional control
+    
+    Returns:
+    --------
+    Dict[str, Dict[str, List[str]]] : Dictionary mapping system names to regional controls,
+                                      each containing a list of zones
+    """
+    return ZONES_BY_SYSTEM_REGIONAL.copy()
+
+
+def get_regional_controls_for_system(system: str):
+    """
+    Get regional controls for a specific system
+    
+    Parameters:
+    -----------
+    system : str
+        System name (SIN, BCA, BCS)
+    
+    Returns:
+    --------
+    List[str] : List of regional control names for the system
+    """
+    system_data = ZONES_BY_SYSTEM_REGIONAL.get(system.upper(), {})
+    return list(system_data.keys())
+
+
+def get_zones_for_regional_control(system: str, regional_control: str):
+    """
+    Get zones for a specific system and regional control
+    
+    Parameters:
+    -----------
+    system : str
+        System name (SIN, BCA, BCS)
+    regional_control : str
+        Regional control name
+    
+    Returns:
+    --------
+    List[str] : List of zones for the regional control
+    """
+    system_data = ZONES_BY_SYSTEM_REGIONAL.get(system.upper(), {})
+    return system_data.get(regional_control.upper(), [])
+
+
+def get_regional_control_for_zone(zone_name: str) -> tuple:
+    """
+    Get the system and regional control that a zone belongs to
+    
+    Parameters:
+    -----------
+    zone_name : str
+        Zone name
+    
+    Returns:
+    --------
+    tuple : (system, regional_control) or ("", "") if not found
+    """
+    normalized = normalize_zone_name(zone_name)
+    
+    for system, regional_controls in ZONES_BY_SYSTEM_REGIONAL.items():
+        for regional_control, zones in regional_controls.items():
+            if normalized in [z.upper() for z in zones]:
+                return system, regional_control
+    
+    return "", ""
 
 
 def get_zones_for_system(system: str):
@@ -137,13 +327,8 @@ def get_system_for_zone(zone_name: str) -> str:
     --------
     str : System name or empty string if not found
     """
-    normalized = normalize_zone_name(zone_name)
-    
-    for system, zones in ZONES_BY_SYSTEM.items():
-        if normalized in [z.upper() for z in zones]:
-            return system
-    
-    return ""
+    system, _ = get_regional_control_for_zone(zone_name)
+    return system
 
 
 def validate_zones(zones: list, system: str = None) -> tuple:
@@ -214,23 +399,36 @@ def group_zones_by_system(zones: list) -> dict:
 
 
 # Export zone information as a structured format
-ZONE_INFO = {
-    "total_zones": get_total_zones(),
-    "systems": {
-        "BCA": {
-            "name": "Baja California",
-            "zones": len(ZONES_BY_SYSTEM["BCA"]),
-            "description": "Isolated grid serving Baja California"
-        },
-        "BCS": {
-            "name": "Baja California Sur", 
-            "zones": len(ZONES_BY_SYSTEM["BCS"]),
-            "description": "Isolated grid serving Baja California Sur"
-        },
-        "SIN": {
-            "name": "Sistema Interconectado Nacional",
-            "zones": len(ZONES_BY_SYSTEM["SIN"]),
-            "description": "Main national grid covering most of Mexico"
+def _build_zone_info():
+    """Build comprehensive zone information structure"""
+    systems_info = {}
+    for system, regional_controls in ZONES_BY_SYSTEM_REGIONAL.items():
+        system_data = {
+            "name": {
+                "BCA": "Baja California",
+                "BCS": "Baja California Sur",
+                "SIN": "Sistema Interconectado Nacional"
+            }.get(system, system),
+            "description": {
+                "BCA": "Isolated grid serving Baja California",
+                "BCS": "Isolated grid serving Baja California Sur",
+                "SIN": "Main national grid covering most of Mexico"
+            }.get(system, ""),
+            "total_zones": len(ZONES_BY_SYSTEM[system]),
+            "regional_controls": {}
         }
+        
+        for regional_control, zones in regional_controls.items():
+            system_data["regional_controls"][regional_control] = {
+                "zones": zones,
+                "zone_count": len(zones)
+            }
+        
+        systems_info[system] = system_data
+    
+    return {
+        "total_zones": get_total_zones(),
+        "systems": systems_info
     }
-}
+
+ZONE_INFO = _build_zone_info()
