@@ -82,7 +82,7 @@ class DataAssembler:
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and standardize the data"""
         # Ensure required columns exist
-        required_columns = ['sistema', 'zona_carga', 'fecha', 'hora', 'demanda']
+        required_columns = ['sistema', 'zona_carga', 'fecha', 'hora']
         for col in required_columns:
             if col not in df.columns:
                 if col == 'sistema':
@@ -90,18 +90,29 @@ class DataAssembler:
                 else:
                     logger.error(f"Missing required column: {col}")
                     return pd.DataFrame()
-        
+
+        if 'demanda' not in df.columns:
+            df['demanda'] = 0.0
+
         # Clean zone names (ensure spaces are preserved)
-        df['zona_carga'] = df['zona_carga'].str.strip()
+        df['zona_carga'] = df['zona_carga'].astype(str).str.strip()
         df['zona_carga'] = df['zona_carga'].str.replace('-', ' ')  # Convert dashes back to spaces
-        
+
         # Parse dates
         df['fecha'] = pd.to_datetime(df['fecha'], format='%Y-%m-%d', errors='coerce')
-        
+
         # Clean numeric columns
         df['hora'] = pd.to_numeric(df['hora'], errors='coerce').fillna(1).astype(int)
         df['demanda'] = pd.to_numeric(df['demanda'], errors='coerce').fillna(0.0)
-        
+
+        # Normalize price-related columns
+        price_columns = [
+            col for col in df.columns
+            if col.startswith('precio') or col.startswith('componente') or col.endswith('_precio')
+        ]
+        for col in price_columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+
         # Remove rows with invalid dates
         df = df[df['fecha'].notna()]
         

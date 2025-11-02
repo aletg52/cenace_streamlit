@@ -11,8 +11,9 @@ import time
 import hashlib
 import json
 from pathlib import Path
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Tuple
 import logging
+import re
 from functools import lru_cache
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -37,7 +38,8 @@ class CENACEClient:
     - Progress tracking
     """
     
-    BASE_URL = "https://ws01.cenace.gob.mx:8082/SWCAEZC/SIM"
+    BASE_URL_DEMAND = "https://ws01.cenace.gob.mx:8082/SWCAEZC/SIM"
+    BASE_URL_PRICE = "https://ws01.cenace.gob.mx:8082/SWPEND/SIM"
     MAX_DAYS_PER_REQUEST = 7
     MAX_ZONES_PER_REQUEST = 10
     CACHE_DURATION_HOURS = 24
@@ -68,11 +70,11 @@ class CENACEClient:
             import urllib3
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
-    def _get_cache_key(self, system: str, zones: List[str], start_date: datetime.date, 
-                      end_date: datetime.date, process: str) -> str:
+    def _get_cache_key(self, system: str, zones: List[str], start_date: datetime.date,
+                      end_date: datetime.date, process: str, data_type: str) -> str:
         """Generate a unique cache key for the request"""
         zones_str = ",".join(sorted(zones))
-        key_str = f"{system}_{process}_{zones_str}_{start_date}_{end_date}"
+        key_str = f"{system}_{process}_{data_type}_{zones_str}_{start_date}_{end_date}"
         return hashlib.md5(key_str.encode()).hexdigest()
     
     def _get_cached_data(self, cache_key: str) -> Optional[Dict]:
@@ -120,22 +122,25 @@ class CENACEClient:
         """Format date for URL"""
         return f"{date.year}/{date.month:02d}/{date.day:02d}"
     
-    def _build_url(self, system: str, zones: List[str], start_date: datetime.date,
-                   end_date: datetime.date, process: str) -> str:
+    def _build_url(self, base_url: str, system: str, zones: List[str], start_date: datetime.date,
+                   end_date: datetime.date, process: str, response_format: str = "XML") -> str:
         """Build the service URL"""
         # Convert zone names with spaces to dashes for URL
         zones_str = ",".join(z.strip().replace(" ", "-") for z in zones)
-        
-        url_parts = [self.BASE_URL, system, process]
-        
+
+        url_parts = [base_url, system, process]
+
         if zones_str:
             url_parts.append(zones_str)
-        
+
         url_parts.extend([
             self._format_date(start_date),
             self._format_date(end_date)
         ])
-        
+
+        if response_format.upper() == "JSON":
+            url_parts.extend(["formato", "JSON"])
+
         return "/".join(url_parts)
     
     @retry(
@@ -143,17 +148,18 @@ class CENACEClient:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((requests.RequestException, ConnectionError))
     )
-    def _make_request(self, url: str) -> str:
+    def _make_request(self, url: str, expected_format: str = "XML") -> str:
         """Make HTTP request with retry logic"""
         logger.info(f"Making request to: {url}")
-        
+
         response = self.session.get(url, verify=self.verify_ssl, timeout=30)
         response.raise_for_status()
-        
-        # Check if we got valid XML
-        if not response.text or response.text.startswith('<!DOCTYPE'):
-            raise ValueError("Invalid response from server")
-        
+
+        if expected_format.upper() == "XML":
+            # Check if we got valid XML
+            if not response.text or response.text.startswith('<!DOCTYPE'):
+                raise ValueError("Invalid response from server")
+
         return response.text
     
     def _parse_xml_response(self, xml_content: str) -> List[Dict]:
@@ -275,27 +281,156 @@ class CENACEClient:
             logger.error(f"Alternative XML parsing failed: {e}")
             logger.error(f"XML content (first 500 chars): {xml_content[:500]}")
             return []
+
+    def _parse_price_response(self, json_content: str) -> List[Dict]:
+        """Parse JSON response for zonal prices"""
+        try:
+            payload = json.loads(json_content)
+        except json.JSONDecodeError as exc:
+            logger.error(f"JSON parsing error: {exc}")
+            return []
+
+        records: List[Dict] = []
+        total_keys = {
+            'precio_total',
+            'precioTotal',
+            'precio_nodo',
+            'precioNodo',
+            'precioMarginalLocal',
+            'precio_marginal_local'
+        }
+
+        def collect(obj, current_system=None, current_zone=None):
+            if isinstance(obj, dict):
+                system = obj.get('sistema') or obj.get('Sistema') or current_system
+                zone = (obj.get('zona_carga') or obj.get('zonaCarga') or
+                        obj.get('zona') or obj.get('Zona_Carga') or current_zone)
+
+                for key, value in obj.items():
+                    if key.lower() == 'valores' and isinstance(value, list):
+                        for entry in value:
+                            if not isinstance(entry, dict):
+                                continue
+
+                            fecha = entry.get('fecha') or entry.get('Fecha')
+                            if not fecha:
+                                continue
+
+                            hora_val = (entry.get('hora') or entry.get('Hora') or
+                                        entry.get('horaProgramada') or entry.get('HoraProgramada') or 0)
+                            try:
+                                hora = int(hora_val)
+                            except (TypeError, ValueError):
+                                hora = 0
+
+                            record = {
+                                'zona_carga': str(zone).strip() if zone else '',
+                                'fecha': str(fecha).strip(),
+                                'hora': hora
+                            }
+
+                            precio_total = None
+                            used_total_key = None
+                            for candidate in total_keys:
+                                if candidate in entry:
+                                    precio_total = self._safe_float(entry[candidate])
+                                    used_total_key = candidate
+                                    break
+
+                            component_values = []
+                            for component_key, component_value in entry.items():
+                                if component_key in total_keys or component_key == used_total_key:
+                                    continue
+
+                                if component_key.lower() in {'fecha', 'hora'}:
+                                    continue
+
+                                numeric_value = self._safe_float(component_value)
+                                if numeric_value is None:
+                                    continue
+
+                                normalized_key = self._normalize_component_key(component_key)
+                                if normalized_key == 'precio_total':
+                                    continue
+
+                                record[normalized_key] = numeric_value
+                                component_values.append(numeric_value)
+
+                            if precio_total is None:
+                                precio_total = sum(component_values) if component_values else 0.0
+
+                            record['precio_total'] = precio_total if precio_total is not None else 0.0
+
+                            if system:
+                                record['sistema'] = str(system).strip()
+
+                            records.append(record)
+                    else:
+                        collect(value, system, zone)
+            elif isinstance(obj, list):
+                for item in obj:
+                    collect(item, current_system, current_zone)
+
+        collect(payload)
+
+        if not records:
+            logger.warning("No price records extracted from JSON response")
+
+        return records
+
+    @staticmethod
+    def _safe_float(value) -> Optional[float]:
+        """Safely convert values to float"""
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        if isinstance(value, str):
+            try:
+                sanitized = value.replace(',', '')
+                return float(sanitized)
+            except ValueError:
+                return None
+
+        return None
+
+    @staticmethod
+    def _normalize_component_key(key: str) -> str:
+        """Normalize JSON keys to snake_case"""
+        key = key.replace(' ', '_').replace('-', '_')
+        key = re.sub(r'(?<!^)(?=[A-Z])', '_', key)
+        return key.lower()
     
     def _download_chunk(self, system: str, zones: List[str], start_date: datetime.date,
-                       end_date: datetime.date, process: str) -> List[Dict]:
+                       end_date: datetime.date, process: str, data_type: str = "demand") -> List[Dict]:
         """Download a single chunk of data (max 7 days, max 10 zones)"""
+        dataset = data_type.lower()
+
+        if dataset not in {"demand", "price"}:
+            raise ValueError(f"Unsupported data type: {data_type}")
+
         # Check cache first
-        cache_key = self._get_cache_key(system, zones, start_date, end_date, process)
+        cache_key = self._get_cache_key(system, zones, start_date, end_date, process, dataset)
         cached_data = self._get_cached_data(cache_key)
         if cached_data:
             return cached_data
-        
+
         # Build URL and make request
-        url = self._build_url(system, zones, start_date, end_date, process)
-        
+        base_url = self.BASE_URL_DEMAND if dataset == "demand" else self.BASE_URL_PRICE
+        response_format = "XML" if dataset == "demand" else "JSON"
+        url = self._build_url(base_url, system, zones, start_date, end_date, process, response_format)
+
         try:
-            xml_content = self._make_request(url)
-            data = self._parse_xml_response(xml_content)
-            
+            response_content = self._make_request(url, expected_format=response_format)
+
+            if dataset == "demand":
+                data = self._parse_xml_response(response_content)
+            else:
+                data = self._parse_price_response(response_content)
+
             # Add system info to each record
             for record in data:
                 record['sistema'] = system
-            
+
             # Save to cache
             self._save_cache(cache_key, data)
             
@@ -307,10 +442,11 @@ class CENACEClient:
     
     def download_data(self, system: str, zones: List[str], start_date: datetime.date,
                      end_date: datetime.date, process: str = "MDA",
+                     data_type: str = "combined",
                      progress_callback: Optional[Callable] = None) -> List[Dict]:
         """
         Download data with automatic chunking for API limits
-        
+
         Parameters:
         -----------
         system : str
@@ -323,13 +459,19 @@ class CENACEClient:
             End date
         process : str
             Process type (MDA)
+        data_type : str
+            Type of dataset to download ('demand', 'price', 'combined')
         progress_callback : Callable
             Optional callback for progress updates (current, total, message)
-        
+
         Returns:
         --------
         List[Dict] : Combined data from all chunks
         """
+        dataset = data_type.lower()
+        if dataset not in {"demand", "price", "combined"}:
+            raise ValueError(f"Unsupported data type: {data_type}")
+
         all_data = []
         
         # Calculate total operations for progress
@@ -338,7 +480,7 @@ class CENACEClient:
         
         current_date = start_date
         total_operations = 0
-        
+
         # Calculate total operations
         while current_date <= end_date:
             chunk_end = min(current_date + timedelta(days=self.MAX_DAYS_PER_REQUEST - 1), end_date)
@@ -357,30 +499,78 @@ class CENACEClient:
             for batch_idx, zone_batch in enumerate(zone_batches):
                 if progress_callback:
                     progress_callback(
-                        current_operation, 
+                        current_operation,
                         total_operations,
                         f"Downloading {system}: {current_date} to {chunk_end}, "
                         f"Zones batch {batch_idx + 1}/{len(zone_batches)}"
                     )
                 
                 # Download chunk
-                chunk_data = self._download_chunk(
-                    system, zone_batch, current_date, chunk_end, process
-                )
-                
-                if chunk_data:
-                    all_data.extend(chunk_data)
-                
+                demand_chunk: List[Dict] = []
+                price_chunk: List[Dict] = []
+
+                if dataset in {"demand", "combined"}:
+                    demand_chunk = self._download_chunk(
+                        system, zone_batch, current_date, chunk_end, process, data_type="demand"
+                    )
+
+                if dataset in {"price", "combined"}:
+                    price_chunk = self._download_chunk(
+                        system, zone_batch, current_date, chunk_end, process, data_type="price"
+                    )
+
+                if dataset == "combined":
+                    merged_chunk = self._merge_records(demand_chunk, price_chunk)
+                    if merged_chunk:
+                        all_data.extend(merged_chunk)
+                elif dataset == "demand":
+                    if demand_chunk:
+                        all_data.extend(demand_chunk)
+                else:
+                    if price_chunk:
+                        all_data.extend(price_chunk)
+
                 # Delay between requests
                 if self.delay > 0:
                     time.sleep(self.delay)
-                
+
                 current_operation += 1
-            
+
             current_date = chunk_end + timedelta(days=1)
-        
-        logger.info(f"Downloaded {len(all_data)} records for {system}")
+
+        logger.info(f"Downloaded {len(all_data)} {dataset} records for {system}")
         return all_data
+
+    def _merge_records(self, demand_records: List[Dict], price_records: List[Dict]) -> List[Dict]:
+        """Merge demand and price records on system, zone, date, and hour"""
+        merged: Dict[Tuple[str, str, str, int], Dict] = {}
+
+        for record in demand_records:
+            key = (
+                record.get('sistema', ''),
+                record.get('zona_carga', ''),
+                record.get('fecha', ''),
+                record.get('hora', 0)
+            )
+            merged[key] = record.copy()
+
+        for record in price_records:
+            key = (
+                record.get('sistema', ''),
+                record.get('zona_carga', ''),
+                record.get('fecha', ''),
+                record.get('hora', 0)
+            )
+
+            if key in merged:
+                for field, value in record.items():
+                    if field in {'sistema', 'zona_carga', 'fecha', 'hora'}:
+                        continue
+                    merged[key][field] = value
+            else:
+                merged[key] = record.copy()
+
+        return list(merged.values())
     
     def clear_cache(self):
         """Clear all cached data"""

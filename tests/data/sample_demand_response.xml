@@ -1,0 +1,17 @@
+<Resultados>
+  <Zona_Carga>
+    <zona_carga>LA PAZ</zona_carga>
+    <Valores>
+      <Valor>
+        <fecha>2024-01-01</fecha>
+        <hora>1</hora>
+        <total_cargas>150.5</total_cargas>
+      </Valor>
+      <Valor>
+        <fecha>2024-01-01</fecha>
+        <hora>2</hora>
+        <total_cargas>148.7</total_cargas>
+      </Valor>
+    </Valores>
+  </Zona_Carga>
+</Resultados>
