@@ -442,9 +442,9 @@ with main_container:
                     fig.add_trace(go.Scatter(
                         x=zone_df['datetime'],
                         y=zone_df[primary_price_col],
-                        mode='markers',
+                        mode='lines',
                         name='Price (MXN/MWh)',
-                        marker=dict(color='#ff7f0e', size=6),
+                        line=dict(color='#ff7f0e', width=2),
                         yaxis='y2'
                     ))
 
@@ -505,9 +505,9 @@ with main_container:
                     fig.add_trace(go.Scatter(
                         x=price_mean.index,
                         y=price_mean,
-                        mode='markers',
+                        mode='lines',
                         name='Average Price (MXN/MWh)',
-                        marker=dict(color='#ff7f0e', size=8),
+                        line=dict(color='#ff7f0e', width=2),
                         yaxis='y2'
                     ))
 
@@ -624,14 +624,14 @@ with main_container:
                     price_peaks.columns = ['date', 'zona_carga', 'peak_price']
                     price_peaks = price_peaks.dropna(subset=['peak_price'])
                     for zone in price_peaks['zona_carga'].unique():
-                        zone_prices = price_peaks[price_peaks['zona_carga'] == zone]
+                        zone_prices = price_peaks[price_peaks['zona_carga'] == zone].sort_values('date')
                         fig.add_trace(go.Scatter(
                             x=zone_prices['date'],
                             y=zone_prices['peak_price'],
-                            mode='markers',
+                            mode='lines',
                             name=f"{zone} Price",
                             legendgroup=zone,
-                            marker=dict(size=8, color='#ff7f0e'),
+                            line=dict(width=2, color='#ff7f0e', dash='dash'),
                             yaxis='y2'
                         ))
 
@@ -670,16 +670,17 @@ with main_container:
 
                 if has_price and primary_price_col:
                     for idx, day_type in enumerate(sorted(comparison['day_type'].unique())):
-                        subset = comparison[comparison['day_type'] == day_type]
+                        subset = comparison[comparison['day_type'] == day_type].sort_values('zona_carga')
                         subset = subset.dropna(subset=[primary_price_col])
                         if subset.empty:
                             continue
                         fig.add_trace(go.Scatter(
                             x=subset['zona_carga'],
                             y=subset[primary_price_col],
-                            mode='markers',
+                            mode='lines+markers',
                             name=f"{day_type} Price",
-                            marker=dict(size=9, symbol='diamond', color='#ff7f0e'),
+                            line=dict(width=2, color='#ff7f0e', dash='dash' if day_type == 'Weekend' else 'solid'),
+                            marker=dict(size=8, symbol='diamond' if day_type == 'Weekend' else 'circle'),
                             yaxis='y2',
                             legendgroup=day_type,
                             offsetgroup=idx
