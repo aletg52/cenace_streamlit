@@ -224,18 +224,33 @@ def test_assembler():
     print("\nTesting data assembler...")
     try:
         from cenace_downloader import DataAssembler
-        import pandas as pd
         
         assembler = DataAssembler()
         
-        # Test with sample data
-        sample_data = [
+        # Test with sample demand and price data
+        demand_data = [
             {
                 'sistema': 'BCS',
                 'zona_carga': 'LA PAZ',
                 'fecha': '2024-01-01',
                 'hora': 1,
-                'demanda': 150.5,
+                'demanda': 150.5
+            },
+            {
+                'sistema': 'BCS',
+                'zona_carga': 'LA PAZ',
+                'fecha': '2024-01-01',
+                'hora': 2,
+                'demanda': 145.2
+            }
+        ]
+
+        price_data = [
+            {
+                'sistema': 'BCS',
+                'zona_carga': 'LA PAZ',
+                'fecha': '2024-01-01',
+                'hora': 1,
                 'precio_total': 120.5,
                 'componente_energia': 100.0
             },
@@ -244,24 +259,41 @@ def test_assembler():
                 'zona_carga': 'LA PAZ',
                 'fecha': '2024-01-01',
                 'hora': 2,
-                'demanda': 145.2,
                 'precio_total': 118.3,
                 'componente_energia': 98.0
+            },
+            {
+                'sistema': 'BCS',
+                'zona_carga': 'LA PAZ',
+                'fecha': '2024-01-01',
+                'hora': 3,
+                'precio_total': 121.0,
+                'componente_energia': 101.0
             }
         ]
-        
-        df = assembler.assemble_data(sample_data)
-        
-        assert len(df) == 2, "Should have 2 records"
+
+        df = assembler.assemble_data(demand_data, price_data)
+
+        assert len(df) == 3, "Should have 3 records after merging demand and price"
         assert 'datetime' in df.columns, "Should have datetime column"
         assert 'is_weekend' in df.columns, "Should have is_weekend column"
         assert 'season' in df.columns, "Should have season column"
-        
+        assert 'precio_total' in df.columns, "Should include merged price column"
+        assert df.loc[df['hora'] == 3, 'demanda'].isna().all(), "Price-only rows should retain missing demand"
+
         # Test statistics
         stats = assembler.get_statistics()
         print(f"  - Total records: {stats.get('total_records', 0)}")
         print(f"  - Average demand: {stats.get('avg_demand_mw', 0):.2f} MW")
-        
+        assert 'avg_prices' in stats and 'precio_total' in stats['avg_prices'], "Should compute average price"
+        expected_avg_price = (120.5 + 118.3 + 121.0) / 3
+        assert abs(stats['avg_prices']['precio_total'] - expected_avg_price) < 1e-6
+
+        daily = assembler.get_daily_summary()
+        assert 'precio_total_mean' in daily.columns, "Daily summary should include price metrics"
+        hourly = assembler.get_hourly_profile()
+        assert 'precio_total_mean' in hourly.columns, "Hourly profile should include price metrics"
+
         print("✅ Data assembler tests passed")
         return True
         
