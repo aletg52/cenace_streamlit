@@ -34,15 +34,24 @@ def estimate_download_time(num_zones: int, num_days: int, delay_per_request: flo
     # Calculate number of API calls needed
     zone_batches = (num_zones + 9) // 10  # Ceiling division for 10-zone batches
     day_chunks = (num_days + 6) // 7  # Ceiling division for 7-day chunks
-    
-    total_requests = zone_batches * day_chunks
-    
+
+    # Each chunk now requires one demand call (SWCAEZC) and one price call (SWPEND)
+    total_requests = zone_batches * day_chunks * 2
+
     # Estimate time per request (API response + processing + delay)
-    avg_response_time = 2.0  # Average API response time in seconds
+    demand_response_time = 2.0  # Average demand API response time in seconds
+    price_response_time = 2.3  # Average price API response time in seconds
     processing_time = 0.5  # Time to process each response
-    
-    total_time = total_requests * (avg_response_time + processing_time + delay_per_request)
-    
+
+    time_per_cycle = (
+        demand_response_time
+        + price_response_time
+        + 2 * processing_time
+        + 2 * delay_per_request
+    )
+
+    total_time = (zone_batches * day_chunks) * time_per_cycle
+
     return format_duration(total_time)
 
 
