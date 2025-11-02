@@ -21,6 +21,9 @@ from cenace_downloader import (
     CENACEClient, 
     DataAssembler,
     get_all_zones,
+    get_all_zones_with_regional,
+    get_regional_controls_for_system,
+    get_zones_for_regional_control,
     estimate_download_time
 )
 
@@ -77,8 +80,9 @@ with st.sidebar:
     # System and Zone Selection
     st.subheader("1️⃣ Select Zones")
     
-    # Get all available zones
+    # Get all available zones (flattened) and with regional control structure
     all_zones = get_all_zones()
+    zones_with_regional = get_all_zones_with_regional()
     
     # System filter
     systems = ["All"] + list(all_zones.keys())
@@ -91,14 +95,37 @@ with st.sidebar:
         key="system_filter_selectbox"
     )
     
-    # Prepare zone options based on system filter
+    # Regional Control filter (only shown if a specific system is selected)
+    selected_regional_control = None
+    if selected_system != "All":
+        regional_controls = get_regional_controls_for_system(selected_system)
+        if regional_controls:
+            regional_options = ["All"] + regional_controls
+            selected_regional_control = st.selectbox(
+                "Filter by Regional Control",
+                regional_options,
+                help="Filter zones by regional control area",
+                key="regional_control_filter_selectbox"
+            )
+            if selected_regional_control == "All":
+                selected_regional_control = None
+    
+    # Prepare zone options based on system and regional control filters
     if selected_system == "All":
         zone_options = []
         for system, zones in all_zones.items():
             for zone in zones:
                 zone_options.append(f"{zone} ({system})")
     else:
-        zone_options = [f"{zone} ({selected_system})" for zone in all_zones[selected_system]]
+        if selected_regional_control:
+            # Filter by specific regional control
+            zones = get_zones_for_regional_control(selected_system, selected_regional_control)
+            zone_options = [f"{zone} ({selected_system})" for zone in zones]
+            st.caption(f"📍 Showing zones from {selected_regional_control} regional control")
+        else:
+            # Show all zones from the selected system
+            zone_options = [f"{zone} ({selected_system})" for zone in all_zones[selected_system]]
+            st.caption(f"📍 Showing all zones from {selected_system} system")
     
     # Select All checkbox
     select_all = st.checkbox("Select All Zones (max 10)", value=False)
