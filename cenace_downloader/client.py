@@ -18,8 +18,11 @@ from functools import lru_cache
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+# Enable debug logging for price API troubleshooting
+# Set to DEBUG temporarily to troubleshoot price API issues
+# logger.setLevel(logging.DEBUG)
 
 # Cache directory
 CACHE_DIR = Path.home() / ".cenace_cache"
@@ -156,9 +159,12 @@ class CENACEClient:
         response.raise_for_status()
 
         if expected_format.upper() == "XML":
-            # Check if we got valid XML
-            if not response.text or response.text.startswith('<!DOCTYPE'):
-                raise ValueError("Invalid response from server")
+            # Check if we got valid XML (but allow HTML error pages to pass through for better error handling)
+            if not response.text:
+                raise ValueError("Empty response from server")
+            # Only reject if it's clearly an HTML error page
+            if response.text.strip().startswith('<!DOCTYPE html'):
+                raise ValueError("Received HTML error page instead of data")
 
         return response.text
     
@@ -282,14 +288,331 @@ class CENACEClient:
             logger.error(f"XML content (first 500 chars): {xml_content[:500]}")
             return []
 
-    def _parse_price_response(self, json_content: str) -> List[Dict]:
-        """Parse JSON response for zonal prices"""
+    def _parse_price_xml_response(self, xml_content: str) -> List[Dict]:
+        """Parse XML response for zonal prices from SWPEND"""
         try:
-            payload = json.loads(json_content)
+            # Clean the XML content
+            xml_content = xml_content.strip()
+            if xml_content.startswith('<?xml'):
+                xml_content = xml_content.split('>', 1)[1]
+            
+            # Parse XML - SW-PEND API returns <Reporte> as root element
+            # Try to parse directly first, then wrap if needed
+            try:
+                root = ET.fromstring(xml_content)
+            except ET.ParseError:
+                # If direct parsing fails, try wrapping
+                root = ET.fromstring(f'<root>{xml_content}</root>')
+            
+            data = []
+            # Price field names based on actual SW-PEND API response structure
+            # Primary field: pz (precio zonal / zonal price) - this is the main price
+            # Components: pz_ene (energy), pz_per (losses), pz_cng (congestion)
+            total_keys = {
+                'pz', 'PZ',  # Primary price field in SW-PEND
+                'precio_total', 'precioTotal', 'PrecioTotal', 'PRECIO_TOTAL',
+                'precio_nodo', 'precioNodo', 'PrecioNodo', 'PRECIO_NODO',
+                'precio_marginal_local', 'precioMarginalLocal', 'PrecioMarginalLocal',
+                'Precio_Marginal_Local', 'PRECIO_MARGINAL_LOCAL',
+                'precio_marginal', 'precioMarginal', 'PrecioMarginal', 'PRECIO_MARGINAL',
+                'precio', 'Precio', 'PRECIO'
+            }
+            
+            # Component field names in SW-PEND
+            component_keys = {
+                'pz_ene', 'pz_ene', 'PZ_ENE',  # Energy component
+                'pz_per', 'pz_per', 'PZ_PER',  # Losses component
+                'pz_cng', 'pz_cng', 'PZ_CNG'   # Congestion component
+            }
+            
+            # SW-PEND structure: <Reporte><Resultados><Zona_Carga>...</Zona_Carga></Resultados></Reporte>
+            # Parse the XML structure - look for Zona_Carga under Resultados or Reporte
+            zona_elements = (root.findall('.//Zona_Carga') + 
+                           root.findall('.//Zona') + 
+                           root.findall('.//ZonaCarga'))
+            
+            # Log XML structure for debugging if no data found
+            if not zona_elements:
+                logger.warning(f"Price XML structure: root={root.tag}, top elements: {[e.tag for e in root[:10]]}")
+                # Check if we have Resultados element
+                resultados = root.find('.//Resultados') or root.find('Resultados')
+                if resultados is not None:
+                    logger.debug(f"Found Resultados element with {len(list(resultados))} children")
+                # Log first 1000 chars of XML for debugging
+                logger.debug(f"XML content preview: {ET.tostring(root, encoding='unicode')[:1000]}")
+            
+            for zona_carga_elem in zona_elements:
+                # Get zona_carga from child element text or attribute
+                zona_carga = zona_carga_elem.findtext('zona_carga', '').strip()
+                if not zona_carga:
+                    zona_carga = zona_carga_elem.findtext('zonaCarga', '').strip()
+                if not zona_carga:
+                    zona_carga = zona_carga_elem.get('zona_carga', zona_carga_elem.get('zona', '')).strip()
+                
+                if not zona_carga:
+                    logger.warning("Could not find zona_carga in zone element")
+                    continue
+                
+                # Find Valores container - try multiple possible names
+                valores_elem = (zona_carga_elem.find('Valores') or 
+                               zona_carga_elem.find('valores') or
+                               zona_carga_elem.find('Valores'))
+                
+                if valores_elem is None:
+                    # Maybe values are directly under zona_carga_elem
+                    valores_elem = zona_carga_elem
+                
+                # Iterate through Valor elements - try multiple variations
+                valor_elements = (valores_elem.findall('Valor') + 
+                                 valores_elem.findall('valores') +
+                                 valores_elem.findall('Valor'))
+                
+                if not valor_elements:
+                    logger.debug(f"No Valor elements found in zona_carga={zona_carga}")
+                    continue
+                
+                for valor in valor_elements:
+                    try:
+                        fecha = valor.findtext('fecha', '').strip()
+                        if not fecha:
+                            fecha = valor.get('fecha', '')
+                        
+                        hora_str = valor.findtext('hora', '0').strip()
+                        if not hora_str:
+                            hora_str = valor.get('hora', '0')
+                        
+                        if not fecha:
+                            logger.warning("Missing fecha in Valor element")
+                            continue
+                        
+                        record = {
+                            'zona_carga': zona_carga,
+                            'fecha': fecha,
+                            'hora': int(hora_str) if hora_str else 0
+                        }
+                        
+                        # Extract price fields - check all possible field names
+                        precio_total = None
+                        component_values = []
+                        
+                        # Look for precio_total or similar fields in text content
+                        # Priority: pz field first (SW-PEND standard), then fallback to other names
+                        for price_key in total_keys:
+                            # Check pz first since it's the SW-PEND standard
+                            if price_key == 'pz':
+                                price_value = valor.findtext('pz', '') or valor.findtext('PZ', '')
+                                if price_value:
+                                    precio_total = self._safe_float(str(price_value).strip())
+                                    if precio_total is not None:
+                                        record['precio_total'] = precio_total
+                                        logger.debug(f"Found precio_total={precio_total} from pz field")
+                                        break
+                                continue
+                            
+                            price_value = valor.findtext(price_key, '')
+                            if not price_value:
+                                # Try with different case variations
+                                price_value = (valor.findtext(price_key.lower(), '') or 
+                                             valor.findtext(price_key.upper(), '') or
+                                             valor.findtext(price_key.capitalize(), ''))
+                            if not price_value:
+                                # Try as attribute
+                                price_value = (valor.get(price_key, '') or
+                                             valor.get(price_key.lower(), '') or
+                                             valor.get(price_key.upper(), ''))
+                            
+                            if price_value:
+                                precio_total = self._safe_float(str(price_value).strip())
+                                if precio_total is not None:
+                                    record['precio_total'] = precio_total
+                                    logger.debug(f"Found precio_total={precio_total} using field {price_key}")
+                                    break
+                        
+                        # Extract all other price-related fields from child elements
+                        for child in valor:
+                            if child.tag.lower() in {'fecha', 'hora'}:
+                                continue
+                            
+                            # Check if it's a price field
+                            tag_lower = child.tag.lower()
+                            tag_text = child.text if child.text else ''
+                            
+                            # SW-PEND uses pz, pz_ene, pz_per, pz_cng fields
+                            if tag_lower == 'pz':
+                                # This is the total price
+                                price_value = self._safe_float(tag_text)
+                                if price_value is not None:
+                                    if 'precio_total' not in record:
+                                        record['precio_total'] = price_value
+                                        logger.debug(f"Found precio_total from pz field: {price_value}")
+                            elif tag_lower in ['pz_ene', 'pz_per', 'pz_cng']:
+                                # These are price components
+                                price_value = self._safe_float(tag_text)
+                                if price_value is not None:
+                                    # Map to more readable names
+                                    component_map = {
+                                        'pz_ene': 'componente_energia',
+                                        'pz_per': 'componente_perdidas',
+                                        'pz_cng': 'componente_congestion'
+                                    }
+                                    normalized_key = component_map.get(tag_lower, tag_lower)
+                                    record[normalized_key] = price_value
+                                    component_values.append(price_value)
+                                    logger.debug(f"Found price component {normalized_key}={price_value}")
+                            elif 'precio' in tag_lower or 'price' in tag_lower:
+                                # Legacy/alternative price field names
+                                price_value = self._safe_float(tag_text)
+                                if price_value is not None:
+                                    normalized_key = self._normalize_component_key(child.tag)
+                                    if normalized_key != 'precio_total' and normalized_key not in record:
+                                        record[normalized_key] = price_value
+                                        component_values.append(price_value)
+                            # Also check numeric values that might be prices (fallback)
+                            elif tag_text and tag_text.strip().replace('.', '').replace('-', '').replace('e', '').replace('E', '').isdigit():
+                                numeric_val = self._safe_float(tag_text)
+                                if numeric_val is not None and abs(numeric_val) > 0:
+                                    # If it's a reasonable price value (between 0 and 50000 MXN/MWh)
+                                    if 0 < abs(numeric_val) < 50000:
+                                        logger.debug(f"Found potential price field: {child.tag}={numeric_val}")
+                                        normalized_key = self._normalize_component_key(child.tag)
+                                        if 'precio' not in normalized_key:
+                                            normalized_key = f'precio_{normalized_key}'
+                                        if normalized_key != 'precio_total' and normalized_key not in record:
+                                            record[normalized_key] = numeric_val
+                                            component_values.append(numeric_val)
+                        
+                        # If no precio_total found, try to sum components
+                        if 'precio_total' not in record:
+                            if component_values:
+                                record['precio_total'] = sum(component_values)
+                                logger.debug(f"Calculated precio_total from components: {record['precio_total']}")
+                            else:
+                                # Log warning but still add record with 0.0
+                                logger.warning(f"No price value found for {zona_carga} {fecha} hora={record['hora']}")
+                                record['precio_total'] = 0.0
+                        
+                        data.append(record)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Error parsing Valor record: {e}")
+                        continue
+            
+            if not data:
+                logger.warning("No price data extracted from XML. Checking structure...")
+                logger.debug(f"XML root: {root.tag}")
+                logger.debug(f"Found top-level elements: {[elem.tag for elem in list(root)[:20]]}")
+                # Try to find any price-related elements
+                all_elements = [elem.tag for elem in root.iter()][:50]
+                logger.debug(f"All XML elements (first 50): {all_elements}")
+                # Log a sample of the XML structure
+                try:
+                    sample_xml = ET.tostring(root, encoding='unicode', method='xml')[:2000]
+                    logger.debug(f"XML structure sample: {sample_xml}")
+                except:
+                    pass
+            
+            return data
+            
+        except ET.ParseError as e:
+            logger.error(f"XML parsing error: {e}")
+            logger.error(f"XML content (first 500 chars): {xml_content[:500]}")
+            # Try alternative parsing
+            return self._parse_alternative_price_xml(xml_content)
+        except Exception as e:
+            logger.error(f"Error parsing price XML: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return []
+    
+    def _parse_alternative_price_xml(self, xml_content: str) -> List[Dict]:
+        """Alternative XML parsing for price responses with different structures"""
+        try:
+            root = ET.fromstring(xml_content)
+            data = []
+            total_keys = {
+                'precio_total', 'precioTotal', 'precio_nodo', 'precioNodo',
+                'precio_marginal_local', 'precioMarginalLocal'
+            }
+            
+            # Try to find Zona_Carga elements or Zona elements
+            for zona_elem in root.findall('.//Zona_Carga') + root.findall('.//Zona'):
+                zona_carga = zona_elem.findtext('zona_carga', '')
+                if not zona_carga:
+                    zona_carga = zona_elem.get('zona_carga', zona_elem.get('zona', '')).strip()
+                
+                if not zona_carga:
+                    continue
+                
+                valores_container = zona_elem.find('Valores')
+                if valores_container is None:
+                    continue
+                
+                for valor in valores_container.findall('Valor') + valores_container.findall('valores'):
+                    fecha = valor.findtext('fecha', '')
+                    if not fecha:
+                        fecha = valor.get('fecha', '')
+                    
+                    hora_str = valor.findtext('hora', '')
+                    if not hora_str:
+                        hora_str = valor.get('hora', '0')
+                    
+                    if not fecha:
+                        continue
+                    
+                    try:
+                        record = {
+                            'zona_carga': zona_carga.strip(),
+                            'fecha': fecha.strip(),
+                            'hora': int(hora_str) if hora_str else 0
+                        }
+                        
+                        # Extract price values
+                        precio_total = None
+                        for price_key in total_keys:
+                            price_val = valor.findtext(price_key, '') or valor.get(price_key, '')
+                            if price_val:
+                                precio_total = self._safe_float(price_val)
+                                if precio_total is not None:
+                                    break
+                        
+                        record['precio_total'] = precio_total if precio_total is not None else 0.0
+                        data.append(record)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Error parsing record in alternative price XML parser: {e}")
+                        continue
+            
+            return data
+        except Exception as e:
+            logger.error(f"Alternative price XML parsing failed: {e}")
+            return []
+    
+    def _is_xml_content(self, content: str) -> bool:
+        """Detect if content is XML"""
+        if not content:
+            return False
+        content_stripped = content.strip()
+        return (content_stripped.startswith('<?xml') or 
+                content_stripped.startswith('<') or
+                content_stripped.startswith('<Resultados>') or
+                content_stripped.startswith('<Zona_Carga>'))
+    
+    def _parse_price_response(self, response_content: str) -> List[Dict]:
+        """Parse response for zonal prices - handles both JSON and XML"""
+        # Detect format and parse accordingly
+        if self._is_xml_content(response_content):
+            logger.info("Detected XML format for price response")
+            return self._parse_price_xml_response(response_content)
+        
+        # Try JSON parsing
+        try:
+            payload = json.loads(response_content)
         except json.JSONDecodeError as exc:
             logger.error(f"JSON parsing error: {exc}")
-            return []
+            # If JSON fails, try XML as fallback
+            logger.info("JSON parsing failed, attempting XML parsing as fallback")
+            return self._parse_price_xml_response(response_content)
 
+        # Parse JSON payload
         records: List[Dict] = []
         total_keys = {
             'precio_total',
@@ -416,20 +739,33 @@ class CENACEClient:
 
         # Build URL and make request
         base_url = self.BASE_URL_DEMAND if dataset == "demand" else self.BASE_URL_PRICE
-        response_format = "XML" if dataset == "demand" else "JSON"
+        # For prices, try XML first (SWPEND), but allow fallback to JSON
+        response_format = "XML" if dataset == "demand" else "XML"
         url = self._build_url(base_url, system, zones, start_date, end_date, process, response_format)
 
         try:
-            response_content = self._make_request(url, expected_format=response_format)
-
-            if dataset == "demand":
-                data = self._parse_xml_response(response_content)
-            else:
+            # For prices, try XML first, but don't enforce format validation
+            if dataset == "price":
+                response_content = self._make_request(url, expected_format="XML")
+                # Log response preview for debugging
+                logger.debug(f"Price API response length: {len(response_content)} chars")
+                logger.debug(f"Price API response preview (first 500 chars): {response_content[:500]}")
+                # _parse_price_response will auto-detect XML vs JSON
                 data = self._parse_price_response(response_content)
+                if not data:
+                    logger.warning(f"No price data parsed from response. URL: {url}")
+                    logger.warning(f"Response content type check: starts with XML={response_content.strip().startswith('<?xml') or response_content.strip().startswith('<')}")
+            else:
+                response_content = self._make_request(url, expected_format=response_format)
+                data = self._parse_xml_response(response_content)
 
             # Add system info to each record
             for record in data:
                 record['sistema'] = system
+
+            # Log successful retrieval
+            if data:
+                logger.info(f"Successfully retrieved {len(data)} {dataset} records for {system}, zones: {zones}")
 
             # Save to cache
             self._save_cache(cache_key, data)
@@ -437,7 +773,10 @@ class CENACEClient:
             return data
             
         except Exception as e:
-            logger.error(f"Error downloading chunk: {e}")
+            logger.error(f"Error downloading chunk for {dataset}: {e}")
+            logger.error(f"Failed URL: {url}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
     
     def download_data(self, system: str, zones: List[str], start_date: datetime.date,
