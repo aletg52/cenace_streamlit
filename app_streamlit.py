@@ -345,40 +345,6 @@ def render_breadcrumb(tab_name="Dashboard", subpage=None):
     breadcrumb_html = " > ".join(breadcrumb_items)
     st.markdown(f'<div class="breadcrumb">{breadcrumb_html}</div>', unsafe_allow_html=True)
 
-# Helper function for quick action buttons
-def render_quick_actions():
-    """Render quick action buttons after download with navigation guidance"""
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div style='text-align: center; padding: 16px; background-color: #ffffff; border-radius: 8px; border: 2px solid #6366f1;'>
-            <p style='margin: 0; font-size: 18px; font-weight: bold; color: #6366f1;'>📊</p>
-            <p style='margin: 4px 0 0 0; font-weight: 600;'>View Dashboard</p>
-            <p style='margin: 4px 0 0 0; font-size: 12px; color: #6b7280;'>See statistics & overview</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.caption("👆 Click the 'Dashboard' tab above")
-    
-    with col2:
-        st.markdown("""
-        <div style='text-align: center; padding: 16px; background-color: #ffffff; border-radius: 8px; border: 2px solid #6366f1;'>
-            <p style='margin: 0; font-size: 18px; font-weight: bold; color: #6366f1;'>📈</p>
-            <p style='margin: 4px 0 0 0; font-weight: 600;'>Explore Visualizations</p>
-            <p style='margin: 4px 0 0 0; font-size: 12px; color: #6b7280;'>Create charts & graphs</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.caption("👆 Click the 'Visualizations' tab above")
-    
-    with col3:
-        st.markdown("""
-        <div style='text-align: center; padding: 16px; background-color: #ffffff; border-radius: 8px; border: 2px solid #6366f1;'>
-            <p style='margin: 0; font-size: 18px; font-weight: bold; color: #6366f1;'>📁</p>
-            <p style='margin: 4px 0 0 0; font-weight: 600;'>Export Data</p>
-            <p style='margin: 4px 0 0 0; font-size: 12px; color: #6b7280;'>Download CSV, Excel, ZIP</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.caption("👆 Click the 'Downloads' tab above")
 
 # Helper function for contextual information box
 def render_info_box(title, content):
@@ -760,7 +726,6 @@ with main_container:
             - **Daily Patterns**: Understand hourly patterns within a typical day
             - **Zone Comparison**: Compare metrics across different zones
             - **Heatmaps**: Spot patterns by hour and date
-            - **Peak Analysis**: Track daily peak values
             - **Weekday vs Weekend**: Compare different day types
             
             **Tips:**
@@ -777,49 +742,11 @@ with main_container:
             price_series = viz_df[primary_price_col].dropna() if primary_price_col else pd.Series(dtype=float)
             has_price = not price_series.empty
 
-            # Informational cards for visualization types
-            st.markdown("### 📊 Visualization Types")
-            info_col1, info_col2, info_col3 = st.columns(3)
-            
-            with info_col1:
-                with st.container():
-                    st.markdown("""
-                    <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #1f77b4; margin-bottom: 16px;'>
-                        <h4 style='margin-top: 0; color: #1f77b4;'>📈 Time Series Analysis</h4>
-                        <p style='color: #6b7280; font-size: 14px; margin-bottom: 0;'>
-                            Track demand and price trends over time. Best for identifying patterns, spikes, and long-term changes.
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            with info_col2:
-                with st.container():
-                    st.markdown("""
-                    <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #6366f1; margin-bottom: 16px;'>
-                        <h4 style='margin-top: 0; color: #6366f1;'>🕐 Pattern Analysis</h4>
-                        <p style='color: #6b7280; font-size: 14px; margin-bottom: 0;'>
-                            Understand daily, hourly, and weekly patterns. Compare weekday vs weekend behavior.
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            with info_col3:
-                with st.container():
-                    st.markdown("""
-                    <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #10b981; margin-bottom: 16px;'>
-                        <h4 style='margin-top: 0; color: #10b981;'>📊 Comparison Tools</h4>
-                        <p style='color: #6b7280; font-size: 14px; margin-bottom: 0;'>
-                            Compare zones side-by-side, analyze peaks, and identify relationships between demand and price.
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
             # Visualization selector
-            st.markdown("---")
             viz_type = st.selectbox(
                 "Select Visualization",
                 ["Demand Time Series", "Daily Patterns", "Zone Comparison",
-                 "Heatmap", "Peak Analysis", "Weekday vs Weekend"],
+                 "Heatmap", "Weekday vs Weekend"],
                 key="viz_type_selectbox",
                 help="Choose the type of analysis you want to perform"
             )
@@ -1009,48 +936,6 @@ with main_container:
                             )
                             fig_price.update_layout(height=600)
                             st.plotly_chart(fig_price, use_container_width=True)
-
-            elif viz_type == "Peak Analysis":
-                demand_peaks = viz_df.groupby([viz_df['fecha'].dt.date, 'zona_carga'])['demanda'].max().reset_index()
-                demand_peaks.columns = ['date', 'zona_carga', 'peak_demand']
-
-                fig = go.Figure()
-                for zone in demand_peaks['zona_carga'].unique():
-                    zone_peaks = demand_peaks[demand_peaks['zona_carga'] == zone]
-                    fig.add_trace(go.Scatter(
-                        x=zone_peaks['date'],
-                        y=zone_peaks['peak_demand'],
-                        mode='lines',
-                        name=f"{zone} Demand",
-                        legendgroup=zone,
-                        line=dict(width=2)
-                    ))
-
-                if has_price and primary_price_col:
-                    price_peaks = viz_df.groupby([viz_df['fecha'].dt.date, 'zona_carga'])[primary_price_col].max().reset_index()
-                    price_peaks.columns = ['date', 'zona_carga', 'peak_price']
-                    price_peaks = price_peaks.dropna(subset=['peak_price'])
-                    for zone in price_peaks['zona_carga'].unique():
-                        zone_prices = price_peaks[price_peaks['zona_carga'] == zone].sort_values('date')
-                        fig.add_trace(go.Scatter(
-                            x=zone_prices['date'],
-                            y=zone_prices['peak_price'],
-                            mode='lines',
-                            name=f"{zone} Price",
-                            legendgroup=zone,
-                            line=dict(width=2, color='#ff7f0e', dash='dash'),
-                            yaxis='y2'
-                        ))
-
-                fig.update_layout(
-                    title="Daily Peak Demand & Price by Zone",
-                    xaxis_title="Date",
-                    yaxis=dict(title='Peak Demand (MW)'),
-                    yaxis2=dict(title='Peak Price (MXN/MWh)', overlaying='y', side='right', showgrid=False),
-                    height=500,
-                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-                )
-                st.plotly_chart(fig, use_container_width=True)
 
             elif viz_type == "Weekday vs Weekend":
                 comparison_df = viz_df.copy()
@@ -1574,12 +1459,6 @@ if st.session_state.get('download_complete', False):
             zones=len(df['zona_carga'].unique()),
             date_range=f"{df['fecha'].min().date()} to {df['fecha'].max().date()}"
         ), unsafe_allow_html=True)
-        
-        # Quick action buttons
-        st.markdown("### 🚀 Quick Actions")
-        st.markdown("Choose where you'd like to go next:")
-        
-        render_quick_actions()
         
         st.markdown("---")
 
