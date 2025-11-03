@@ -386,55 +386,66 @@ with main_container:
             Access Mexico's electrical demand and zonal price data from CENACE's web services.
             """)
             
-            # Step-by-step guide with visual indicators
+            # Step-by-step guide in boxes
             st.markdown("### 🚀 Quick Start Guide")
             
-            guide_col1, guide_col2 = st.columns([2, 1])
+            # Create 5 boxes for the 5 steps
+            step_col1, step_col2, step_col3, step_col4, step_col5 = st.columns(5)
             
-            with guide_col1:
+            with step_col1:
                 st.markdown("""
-                **1️⃣ Select Zones** (Sidebar)
-                - Choose up to 10 zones from SIN, BCA, or BCS systems
-                - Filter by Regional Control for easier selection
-                - Mix zones from different systems
-                
-                **2️⃣ Choose Date Range** (Sidebar)
-                - Use presets (Last 7/30 days) or select custom dates
-                - Maximum 1 year range
-                - Note: Data has 1-day delay
-                
-                **3️⃣ Configure Settings** (Optional)
-                - Adjust SSL verification if needed
-                - Set retry attempts and request delays
-                
-                **4️⃣ Download Data** (Sidebar)
-                - Click "Start Download" to retrieve demand and prices
-                - Progress tracked in real-time
-                - Data automatically cached for 24 hours
-                
-                **5️⃣ Explore & Analyze**
-                - View statistics in Dashboard tab
-                - Create visualizations in Visualizations tab
-                - Export data in Downloads tab
-                """)
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #1f77b4; margin-bottom: 16px; height: 100%;'>
+                    <h4 style='margin-top: 0; color: #1f77b4; font-size: 16px;'>1️⃣ Select Zones</h4>
+                    <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
+                        Choose up to 10 zones from SIN, BCA, or BCS systems. Filter by Regional Control for easier selection.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            with guide_col2:
+            with step_col2:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #6366f1;'>
-                    <h4 style='margin-top: 0; color: #6366f1;'>💡 Pro Tips</h4>
-                    <ul style='color: #6b7280; font-size: 14px; line-height: 1.8;'>
-                        <li>Start with 1-2 zones to test</li>
-                        <li>Use Regional Control filter for SIN zones</li>
-                        <li>Data downloads faster with smaller date ranges</li>
-                        <li>Check cache status to avoid re-downloads</li>
-                    </ul>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #6366f1; margin-bottom: 16px; height: 100%;'>
+                    <h4 style='margin-top: 0; color: #6366f1; font-size: 16px;'>2️⃣ Choose Date Range</h4>
+                    <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
+                        Use presets (Last 7/30 days) or select custom dates. Maximum 1 year range. Data has 1-day delay.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with step_col3:
+                st.markdown("""
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #10b981; margin-bottom: 16px; height: 100%;'>
+                    <h4 style='margin-top: 0; color: #10b981; font-size: 16px;'>3️⃣ Configure Settings</h4>
+                    <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
+                        Adjust SSL verification if needed. Set retry attempts and request delays (optional).
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with step_col4:
+                st.markdown("""
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 16px; height: 100%;'>
+                    <h4 style='margin-top: 0; color: #f59e0b; font-size: 16px;'>4️⃣ Download Data</h4>
+                    <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
+                        Click "Start Download" to retrieve demand and prices. Progress tracked in real-time. Data cached for 24 hours.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with step_col5:
+                st.markdown("""
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 16px; height: 100%;'>
+                    <h4 style='margin-top: 0; color: #ef4444; font-size: 16px;'>5️⃣ Explore & Analyze</h4>
+                    <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
+                        View statistics in Dashboard, create visualizations, and export data in multiple formats.
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
             
             st.markdown("---")
             
-            # Show system information
-            st.subheader("📍 Available Systems and Zones")
+            # Show system information at same level as Quick Start
+            st.markdown("### 📍 Available Systems and Zones")
             
             col1, col2, col3 = st.columns(3)
             
