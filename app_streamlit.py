@@ -388,7 +388,7 @@ with main_container:
             
             with step_col1:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #e0e0e0; margin-bottom: 16px; height: 100%;'>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>1️⃣ Select Zones</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
                         Choose up to 10 zones from SIN, BCA, or BCS systems. Filter by Regional Control for easier selection.
@@ -398,7 +398,7 @@ with main_container:
             
             with step_col2:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #374151; margin-bottom: 16px; height: 100%;'>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>2️⃣ Choose Date Range</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
                         Use presets (Last 7/30 days) or select custom dates. Maximum 1 year range. Data has 1-day delay.
@@ -408,7 +408,7 @@ with main_container:
             
             with step_col3:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #374151; margin-bottom: 16px; height: 100%;'>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>3️⃣ Configure Settings</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
                         Adjust SSL verification if needed. Set retry attempts and request delays (optional).
@@ -418,7 +418,7 @@ with main_container:
             
             with step_col4:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #374151; margin-bottom: 16px; height: 100%;'>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>4️⃣ Download Data</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
                         Click "Start Download" to retrieve demand and prices. Progress tracked in real-time. Data cached for 24 hours.
@@ -428,7 +428,7 @@ with main_container:
             
             with step_col5:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #374151; margin-bottom: 16px; height: 100%;'>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>5️⃣ Explore & Analyze</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
                         View statistics in Dashboard, create visualizations, and export data in multiple formats.
