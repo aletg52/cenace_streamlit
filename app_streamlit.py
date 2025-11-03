@@ -388,7 +388,7 @@ with main_container:
             
             with step_col1:
                 st.markdown("""
-                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #374151; margin-bottom: 16px; height: 100%;'>
+                <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #e0e0e0; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>1️⃣ Select Zones</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
                         Choose up to 10 zones from SIN, BCA, or BCS systems. Filter by Regional Control for easier selection.
