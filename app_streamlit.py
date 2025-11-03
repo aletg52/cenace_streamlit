@@ -380,12 +380,6 @@ with main_container:
         
         if not has_valid_data:
             # Show instructions when no data
-            st.markdown("""
-            ### 👋 Welcome to the CENACE Demand & Price Downloader
-            
-            Access Mexico's electrical demand and zonal price data from CENACE's web services.
-            """)
-            
             # Step-by-step guide in boxes
             st.markdown("### 🚀 Quick Start Guide")
             
