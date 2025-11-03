@@ -148,7 +148,7 @@ if 'data_refresh_key' not in st.session_state:
 # Note: We don't use pending_rerun anymore - widget interactions handle reruns naturally
 
 # Header
-st.title("⚡ CENACE Demand & Price Downloader")
+st.title("CENACE Demand & Price Downloader")
 st.markdown("### Download Mexico's electrical demand and zonal price data from CENACE's web services")
 
 # Sidebar for configuration
