@@ -1460,6 +1460,17 @@ if st.session_state.get('download_complete', False):
             date_range=f"{df['fecha'].min().date()} to {df['fecha'].max().date()}"
         ), unsafe_allow_html=True)
         
+        # Button to load and view the data
+        st.markdown("### 📊 View Your Data")
+        st.markdown("Click the button below to load and view your downloaded data in the Dashboard tab.")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🔄 Load Data in Dashboard", use_container_width=True, type="primary", key="load_data_button"):
+                # Increment refresh key to trigger data reload
+                st.session_state.data_refresh_key = st.session_state.get('data_refresh_key', 0) + 1
+                st.rerun()
+        
         st.markdown("---")
 
 # Footer
