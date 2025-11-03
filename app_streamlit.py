@@ -38,22 +38,100 @@ st.set_page_config(
 # Custom CSS for better UI
 st.markdown("""
 <style>
+    /* Progress bar styling */
     .stProgress > div > div > div > div {
         background-color: #00CC88;
     }
+    
+    /* Card styling */
     .stat-card {
-        background-color: #f0f2f6;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 10px 0;
+        background-color: #ffffff;
+        padding: 24px;
+        border-radius: 12px;
+        margin: 12px 0;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .download-btn {
-        background-color: #00CC88;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 5px;
+    
+    /* Metric card enhancements */
+    .metric-card {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #1f77b4;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    /* Info box styling */
+    .info-box {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #6366f1;
+        margin: 16px 0;
+    }
+    
+    /* Breadcrumb styling */
+    .breadcrumb {
+        font-size: 14px;
+        color: #6b7280;
+        margin-bottom: 16px;
+        padding: 8px 0;
+    }
+    
+    .breadcrumb a {
+        color: #6366f1;
         text-decoration: none;
-        display: inline-block;
+    }
+    
+    .breadcrumb a:hover {
+        text-decoration: underline;
+    }
+    
+    /* Quick action buttons */
+    .quick-action-btn {
+        padding: 12px 24px;
+        border-radius: 8px;
+        margin: 8px;
+        text-align: center;
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        transition: all 0.2s;
+    }
+    
+    .quick-action-btn:hover {
+        border-color: #6366f1;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+    }
+    
+    /* Increase spacing */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Tab styling improvements */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 12px 20px;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    /* Better data table spacing */
+    .dataframe {
+        font-size: 14px;
+    }
+    
+    /* Description text styling */
+    .description-text {
+        color: #6b7280;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-top: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -255,16 +333,76 @@ with st.sidebar:
         type="primary"
     )
 
+# Helper function for breadcrumb navigation
+def render_breadcrumb(tab_name="Dashboard", subpage=None):
+    """Render breadcrumb navigation"""
+    breadcrumb_items = ["Dashboard"]
+    if tab_name != "Dashboard":
+        breadcrumb_items.append(tab_name)
+    if subpage:
+        breadcrumb_items.append(subpage)
+    
+    breadcrumb_html = " > ".join(breadcrumb_items)
+    st.markdown(f'<div class="breadcrumb">{breadcrumb_html}</div>', unsafe_allow_html=True)
+
+# Helper function for quick action buttons
+def render_quick_actions():
+    """Render quick action buttons after download with navigation guidance"""
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div style='text-align: center; padding: 16px; background-color: #ffffff; border-radius: 8px; border: 2px solid #6366f1;'>
+            <p style='margin: 0; font-size: 18px; font-weight: bold; color: #6366f1;'>📊</p>
+            <p style='margin: 4px 0 0 0; font-weight: 600;'>View Dashboard</p>
+            <p style='margin: 4px 0 0 0; font-size: 12px; color: #6b7280;'>See statistics & overview</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("👆 Click the 'Dashboard' tab above")
+    
+    with col2:
+        st.markdown("""
+        <div style='text-align: center; padding: 16px; background-color: #ffffff; border-radius: 8px; border: 2px solid #6366f1;'>
+            <p style='margin: 0; font-size: 18px; font-weight: bold; color: #6366f1;'>📈</p>
+            <p style='margin: 4px 0 0 0; font-weight: 600;'>Explore Visualizations</p>
+            <p style='margin: 4px 0 0 0; font-size: 12px; color: #6b7280;'>Create charts & graphs</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("👆 Click the 'Visualizations' tab above")
+    
+    with col3:
+        st.markdown("""
+        <div style='text-align: center; padding: 16px; background-color: #ffffff; border-radius: 8px; border: 2px solid #6366f1;'>
+            <p style='margin: 0; font-size: 18px; font-weight: bold; color: #6366f1;'>📁</p>
+            <p style='margin: 4px 0 0 0; font-weight: 600;'>Export Data</p>
+            <p style='margin: 4px 0 0 0; font-size: 12px; color: #6b7280;'>Download CSV, Excel, ZIP</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.caption("👆 Click the 'Downloads' tab above")
+
+# Helper function for contextual information box
+def render_info_box(title, content):
+    """Render contextual information box"""
+    with st.expander(f"ℹ️ {title}", expanded=False):
+        st.markdown(content)
+
 # Main content area
 main_container = st.container()
 
 with main_container:
     # Create tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "📈 Visualizations", "📁 Downloads", "ℹ️ Help"])
+    tab_names = ["📊 Dashboard", "📈 Visualizations", "📁 Downloads", "ℹ️ Help"]
+    
+    # Create tabs (Streamlit doesn't support programmatic switching, but we can use session state hints)
+    tabs = st.tabs(tab_names)
+    
+    tab1, tab2, tab3, tab4 = tabs
     
     with tab1:
-        # Dashboard Tab - Always read fresh from session state
-        # Use .get() to ensure we're reading the current value, not a cached reference
+        # Dashboard Tab
+        render_breadcrumb("Dashboard")
+        
+        # Always read fresh from session state
         df = st.session_state.get('download_data')
         
         # Check if we have valid data
@@ -279,20 +417,55 @@ with main_container:
             st.markdown("""
             ### 👋 Welcome to the CENACE Demand & Price Downloader
             
-            **Quick Start:**
-            1. Select zones from the sidebar (up to 10)
-            2. Choose your date range
-            3. Click "Start Download" to retrieve demand **and** zonal prices
-            4. View, analyze, and export your merged dataset
-            
-            **Features:**
-            - ✅ Mix zones from different systems
-            - ✅ Automatic 7-day chunking for API limits
-            - ✅ Smart caching to avoid duplicate requests
-            - ✅ Real-time progress tracking
-            - ✅ Demand & price preview and statistics
-            - ✅ Multiple download formats (CSV, ZIP, Excel)
+            Access Mexico's electrical demand and zonal price data from CENACE's web services.
             """)
+            
+            # Step-by-step guide with visual indicators
+            st.markdown("### 🚀 Quick Start Guide")
+            
+            guide_col1, guide_col2 = st.columns([2, 1])
+            
+            with guide_col1:
+                st.markdown("""
+                **1️⃣ Select Zones** (Sidebar)
+                - Choose up to 10 zones from SIN, BCA, or BCS systems
+                - Filter by Regional Control for easier selection
+                - Mix zones from different systems
+                
+                **2️⃣ Choose Date Range** (Sidebar)
+                - Use presets (Last 7/30 days) or select custom dates
+                - Maximum 1 year range
+                - Note: Data has 1-day delay
+                
+                **3️⃣ Configure Settings** (Optional)
+                - Adjust SSL verification if needed
+                - Set retry attempts and request delays
+                
+                **4️⃣ Download Data** (Sidebar)
+                - Click "Start Download" to retrieve demand and prices
+                - Progress tracked in real-time
+                - Data automatically cached for 24 hours
+                
+                **5️⃣ Explore & Analyze**
+                - View statistics in Dashboard tab
+                - Create visualizations in Visualizations tab
+                - Export data in Downloads tab
+                """)
+            
+            with guide_col2:
+                st.markdown("""
+                <div style='background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #6366f1;'>
+                    <h4 style='margin-top: 0; color: #6366f1;'>💡 Pro Tips</h4>
+                    <ul style='color: #6b7280; font-size: 14px; line-height: 1.8;'>
+                        <li>Start with 1-2 zones to test</li>
+                        <li>Use Regional Control filter for SIN zones</li>
+                        <li>Data downloads faster with smaller date ranges</li>
+                        <li>Check cache status to avoid re-downloads</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("---")
             
             # Show system information
             st.subheader("📍 Available Systems and Zones")
@@ -315,6 +488,28 @@ with main_container:
             if 'fecha' not in df.columns or 'zona_carga' not in df.columns:
                 st.warning("⚠️ No data available to display")
             else:
+                # Contextual information about the dashboard
+                render_info_box("About This Data", """
+                This dashboard shows your downloaded CENACE electrical demand and zonal price data.
+                
+                **What you're seeing:**
+                - **Demand Data**: Hourly electrical demand in megawatts (MW) for each zone
+                - **Price Data**: Zonal electricity prices in Mexican Pesos per megawatt-hour (MXN/MWh)
+                - **Merged Dataset**: Demand and price data are automatically combined by zone, date, and hour
+                
+                **Data Structure:**
+                - Each record represents one hour of data for one zone
+                - Demand values show actual power consumption
+                - Price values include total price and components (energy, losses, congestion)
+                - Data spans the date range you selected during download
+                
+                **What you can do:**
+                - View summary statistics for all zones
+                - Filter and preview specific data points
+                - Export data in multiple formats (see Downloads tab)
+                - Analyze trends and patterns (see Visualizations tab)
+                """)
+                
                 st.subheader("📊 Data Overview")
 
                 price_columns = [col for col in df.columns if col.startswith('precio')]
@@ -322,17 +517,35 @@ with main_container:
                 price_series = df[primary_price_col].dropna() if primary_price_col else pd.Series(dtype=float)
                 has_price = not price_series.empty
 
-                # Key metrics
+                # Key metrics - enhanced card style
                 col1, col2, col3, col4 = st.columns(4)
 
                 with col1:
-                    st.metric("Total Records", f"{len(df):,}")
+                    st.metric(
+                        "Total Records",
+                        f"{len(df):,}",
+                        help="Total number of hourly records in your dataset"
+                    )
+                    st.caption("Hourly data points")
                 with col2:
-                    st.metric("Date Range", f"{df['fecha'].min().date()} to {df['fecha'].max().date()}")
+                    date_range_str = f"{df['fecha'].min().date()} to {df['fecha'].max().date()}"
+                    days = (df['fecha'].max() - df['fecha'].min()).days + 1
+                    st.metric("Date Range", date_range_str)
+                    st.caption(f"{days} days of data")
                 with col3:
-                    st.metric("Zones", len(df['zona_carga'].unique()))
+                    st.metric(
+                        "Zones",
+                        len(df['zona_carga'].unique()),
+                        help="Number of different load zones in your dataset"
+                    )
+                    st.caption("Unique zones")
                 with col4:
-                    st.metric("Systems", len(df['sistema'].unique()))
+                    st.metric(
+                        "Systems",
+                        len(df['sistema'].unique()),
+                        help="Number of electrical systems (SIN, BCA, BCS)"
+                    )
+                    st.caption("Electrical systems")
 
                 if has_price:
                     col5, col6, col7 = st.columns(3)
@@ -342,13 +555,86 @@ with main_container:
                     price_spread = max_price - min_price
 
                     with col5:
-                        st.metric("Average Price (MXN/MWh)", f"{avg_price:,.2f}")
+                        st.metric(
+                            "Average Price",
+                            f"{avg_price:,.2f} MXN/MWh",
+                            help="Mean zonal price across all zones and hours"
+                        )
+                        st.caption("Mean price per MWh")
                     with col6:
-                        st.metric("Peak Price (MXN/MWh)", f"{max_price:,.2f}")
+                        st.metric(
+                            "Peak Price",
+                            f"{max_price:,.2f} MXN/MWh",
+                            help="Highest zonal price in your dataset"
+                        )
+                        st.caption("Maximum price observed")
                     with col7:
-                        st.metric("Price Spread", f"{price_spread:,.2f}")
+                        st.metric(
+                            "Price Spread",
+                            f"{price_spread:,.2f} MXN/MWh",
+                            help="Difference between highest and lowest prices"
+                        )
+                        st.caption("Price range")
+                
+                # Data Quality Indicators
+                st.markdown("---")
+                st.subheader("📊 Data Quality Indicators")
+                
+                # Calculate data completeness (24 hours per day)
+                unique_zones_count = len(df['zona_carga'].unique())
+                date_range = pd.date_range(df['fecha'].min(), df['fecha'].max(), freq='D')
+                total_expected_records = unique_zones_count * len(date_range) * 24
+                actual_records = len(df)
+                completeness_pct = (actual_records / total_expected_records * 100) if total_expected_records > 0 else 100
+                
+                # Check for missing demand data
+                demand_completeness = (1 - df['demanda'].isna().sum() / len(df)) * 100
+                
+                # Check for missing price data
+                price_completeness = (1 - df[primary_price_col].isna().sum() / len(df)) * 100 if has_price else 0
+                
+                quality_col1, quality_col2, quality_col3, quality_col4 = st.columns(4)
+                
+                with quality_col1:
+                    st.metric(
+                        "Records Coverage",
+                        f"{completeness_pct:.1f}%",
+                        help="Percentage of expected hourly records present"
+                    )
+                    st.caption(f"{actual_records:,} / ~{total_expected_records:,}")
+                
+                with quality_col2:
+                    st.metric(
+                        "Demand Data",
+                        f"{demand_completeness:.1f}%",
+                        help="Percentage of records with demand values"
+                    )
+                    st.caption(f"{df['demanda'].notna().sum():,} records")
+                
+                with quality_col3:
+                    if has_price:
+                        st.metric(
+                            "Price Data",
+                            f"{price_completeness:.1f}%",
+                            help="Percentage of records with price values"
+                        )
+                        st.caption(f"{df[primary_price_col].notna().sum():,} records")
+                    else:
+                        st.metric("Price Data", "N/A")
+                        st.caption("No price data available")
+                
+                with quality_col4:
+                    zones_with_full_data = len(df[df['demanda'].notna()].groupby('zona_carga'))
+                    total_zones = len(df['zona_carga'].unique())
+                    st.metric(
+                        "Zones with Data",
+                        f"{zones_with_full_data} / {total_zones}",
+                        help="Number of zones with complete demand data"
+                    )
+                    st.caption(f"{zones_with_full_data / total_zones * 100:.0f}% coverage")
                 
                 # Statistics by zone
+                st.markdown("---")
                 st.subheader("📈 Zone Statistics")
 
                 agg_map = {
@@ -392,33 +678,69 @@ with main_container:
 
                 st.dataframe(zone_stats, use_container_width=True)
                 
-                # Data preview
+                # Data preview with better organization
+                st.markdown("---")
                 st.subheader("🔍 Data Preview")
-                st.caption("Preview includes merged demand and price data. Use filters to focus on a single zone.")
+                
+                # Summary stats above preview
+                preview_summary_col1, preview_summary_col2, preview_summary_col3 = st.columns(3)
+                with preview_summary_col1:
+                    st.metric("Total Records", f"{len(df):,}")
+                with preview_summary_col2:
+                    unique_dates = len(df['fecha'].unique())
+                    st.metric("Unique Dates", f"{unique_dates}")
+                with preview_summary_col3:
+                    unique_zones = len(df['zona_carga'].unique())
+                    st.metric("Unique Zones", f"{unique_zones}")
+                
+                st.caption("Preview includes merged demand and price data. Use filters to focus on a specific zone or date range.")
 
                 # Add filters for preview
-                col1, col2 = st.columns(2)
-                with col1:
+                preview_filter_col1, preview_filter_col2, preview_filter_col3 = st.columns(3)
+                with preview_filter_col1:
                     preview_zone = st.selectbox(
-                        "Filter by Zone (Preview)",
-                        ["All"] + list(df['zona_carga'].unique()),
-                        key="preview_zone_selectbox"
+                        "Filter by Zone",
+                        ["All"] + sorted(list(df['zona_carga'].unique())),
+                        key="preview_zone_selectbox",
+                        help="Select a specific zone to preview"
                     )
-                with col2:
+                with preview_filter_col2:
+                    preview_date = st.selectbox(
+                        "Filter by Date",
+                        ["All"] + sorted([str(d.date()) for d in df['fecha'].unique()]),
+                        key="preview_date_selectbox",
+                        help="Select a specific date to preview"
+                    )
+                with preview_filter_col3:
                     preview_limit = st.number_input(
                         "Number of rows",
                         min_value=10,
                         max_value=1000,
                         value=100,
-                        step=10
+                        step=10,
+                        help="Maximum number of rows to display"
                     )
                 
                 # Apply preview filters
-                preview_df = df if preview_zone == "All" else df[df['zona_carga'] == preview_zone]
-                st.dataframe(preview_df.head(preview_limit), use_container_width=True)
+                preview_df = df.copy()
+                if preview_zone != "All":
+                    preview_df = preview_df[preview_df['zona_carga'] == preview_zone]
+                if preview_date != "All":
+                    preview_df = preview_df[preview_df['fecha'].astype(str).str.startswith(preview_date)]
+                
+                # Show filtered preview
+                if len(preview_df) > 0:
+                    st.dataframe(preview_df.head(preview_limit), use_container_width=True, height=400)
+                    if len(preview_df) > preview_limit:
+                        st.caption(f"Showing first {preview_limit} of {len(preview_df):,} filtered records")
+                else:
+                    st.info("No records match the selected filters. Try different zone or date selection.")
     
     with tab2:
-        # Visualizations Tab - Always get fresh data from session state
+        # Visualizations Tab
+        render_breadcrumb("Visualizations")
+        
+        # Always get fresh data from session state
         df = st.session_state.get('download_data', None)
         # Check for all required columns including 'fecha' and 'datetime'
         has_valid_data = (df is not None and 
@@ -429,6 +751,23 @@ with main_container:
                          'datetime' in df.columns)
         
         if has_valid_data:
+            # Contextual information about visualizations
+            render_info_box("About Visualizations", """
+            Interactive charts help you understand patterns and trends in your CENACE data.
+            
+            **Available Visualizations:**
+            - **Time Series**: See how demand and prices change over time
+            - **Daily Patterns**: Understand hourly patterns within a typical day
+            - **Zone Comparison**: Compare metrics across different zones
+            - **Heatmaps**: Spot patterns by hour and date
+            - **Peak Analysis**: Track daily peak values
+            - **Weekday vs Weekend**: Compare different day types
+            
+            **Tips:**
+            - Use zoom and pan to focus on specific time periods
+            - Hover over data points to see exact values
+            - Toggle legend items to show/hide data series
+            """)
 
             st.subheader("📈 Data Visualizations")
 
@@ -438,13 +777,54 @@ with main_container:
             price_series = viz_df[primary_price_col].dropna() if primary_price_col else pd.Series(dtype=float)
             has_price = not price_series.empty
 
+            # Informational cards for visualization types
+            st.markdown("### 📊 Visualization Types")
+            info_col1, info_col2, info_col3 = st.columns(3)
+            
+            with info_col1:
+                with st.container():
+                    st.markdown("""
+                    <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #1f77b4; margin-bottom: 16px;'>
+                        <h4 style='margin-top: 0; color: #1f77b4;'>📈 Time Series Analysis</h4>
+                        <p style='color: #6b7280; font-size: 14px; margin-bottom: 0;'>
+                            Track demand and price trends over time. Best for identifying patterns, spikes, and long-term changes.
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with info_col2:
+                with st.container():
+                    st.markdown("""
+                    <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #6366f1; margin-bottom: 16px;'>
+                        <h4 style='margin-top: 0; color: #6366f1;'>🕐 Pattern Analysis</h4>
+                        <p style='color: #6b7280; font-size: 14px; margin-bottom: 0;'>
+                            Understand daily, hourly, and weekly patterns. Compare weekday vs weekend behavior.
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with info_col3:
+                with st.container():
+                    st.markdown("""
+                    <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #10b981; margin-bottom: 16px;'>
+                        <h4 style='margin-top: 0; color: #10b981;'>📊 Comparison Tools</h4>
+                        <p style='color: #6b7280; font-size: 14px; margin-bottom: 0;'>
+                            Compare zones side-by-side, analyze peaks, and identify relationships between demand and price.
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
             # Visualization selector
+            st.markdown("---")
             viz_type = st.selectbox(
                 "Select Visualization",
                 ["Demand Time Series", "Daily Patterns", "Zone Comparison",
                  "Heatmap", "Peak Analysis", "Weekday vs Weekend"],
-                key="viz_type_selectbox"
+                key="viz_type_selectbox",
+                help="Choose the type of analysis you want to perform"
             )
+            
+            render_breadcrumb("Visualizations", viz_type)
 
             if viz_type == "Demand Time Series":
                 zone_to_plot = st.selectbox(
@@ -728,7 +1108,10 @@ with main_container:
             st.info("📊 Download data first to see visualizations")
     
     with tab3:
-        # Downloads Tab - Always get fresh data from session state
+        # Downloads Tab
+        render_breadcrumb("Downloads")
+        
+        # Always get fresh data from session state
         df = None
         if 'download_data' in st.session_state and st.session_state.download_data is not None:
             df = st.session_state.download_data.copy() if hasattr(st.session_state.download_data, 'copy') else st.session_state.download_data
@@ -741,6 +1124,24 @@ with main_container:
                          'fecha' in df.columns)
         
         if has_valid_data:
+            # Contextual information about downloads
+            render_info_box("About Downloads", """
+            Export your data in multiple formats for further analysis.
+            
+            **Available Formats:**
+            - **CSV**: Combined dataset with all zones (best for Excel, Python, R)
+            - **ZIP**: Individual CSV files per zone (organized by zone name)
+            - **Excel**: Multi-sheet workbook with raw data, statistics, and summaries
+            
+            **What's Included:**
+            - All hourly records with demand and price data
+            - System, zone, date, and time information
+            - Price components (energy, losses, congestion) when available
+            - Derived fields (datetime, is_weekend, season)
+            
+            **File Naming:**
+            Files are automatically named with date ranges for easy organization.
+            """)
 
             st.subheader("📁 Download Options")
             st.caption("All exports include hourly demand and zonal price fields.")
@@ -862,54 +1263,194 @@ with main_container:
     
     with tab4:
         # Help Tab
+        render_breadcrumb("Help")
         st.subheader("ℹ️ Help & Documentation")
         
-        st.markdown("""
-        ### 📚 User Guide
+        # Organized help sections with tabs or expanders
+        help_sections = st.tabs(["📖 Getting Started", "📊 Understanding Data", "⚙️ Technical Details", "🔧 Troubleshooting"])
         
-        **1. Understanding the Systems:**
-        - **SIN** (Sistema Interconectado Nacional): Main grid covering most of Mexico
-        - **BCA** (Baja California): Isolated grid in Baja California
-        - **BCS** (Baja California Sur): Isolated grid in Baja California Sur
+        with help_sections[0]:
+            st.markdown("### 🚀 Quick Start Guide")
+            st.markdown("""
+            **Step 1: Select Zones**
+            - Use the sidebar to select up to 10 zones
+            - Filter by System (SIN, BCA, BCS) for easier selection
+            - Use Regional Control filter for SIN zones to narrow down options
+            - Mix zones from different systems if needed
+            
+            **Step 2: Choose Date Range**
+            - Use presets: Last 7 Days, Last 30 Days, Current Month
+            - Or select custom dates (max 1 year)
+            - Remember: CENACE data has a 1-day delay
+            
+            **Step 3: Download Data**
+            - Click "Start Download" in the sidebar
+            - Monitor progress in real-time
+            - Wait for completion (usually 1-5 minutes depending on range)
+            
+            **Step 4: Explore Your Data**
+            - **Dashboard Tab**: View summary statistics and data quality
+            - **Visualizations Tab**: Create interactive charts and graphs
+            - **Downloads Tab**: Export data in CSV, Excel, or ZIP formats
+            """)
+            
+            st.markdown("### 💡 Pro Tips")
+            st.markdown("""
+            - Start with 1-2 zones to familiarize yourself with the interface
+            - Use Regional Control filter when selecting SIN zones (makes selection easier)
+            - Download data in smaller chunks for faster results
+            - Check the Data Quality Indicators to understand data completeness
+            - Use the "About This Data" expandable sections for context
+            """)
         
-        **2. API Limitations:**
-        - Maximum 7 days per request (handled automatically)
-        - Maximum 10 zones per request
-        - Data available with 1-day delay
+        with help_sections[1]:
+            st.markdown("### 📊 Understanding Your Data")
+            
+            st.markdown("""
+            #### What is Demand Data?
+            Demand data represents the actual electrical power consumption in megawatts (MW) for each zone.
+            - Measured hourly (24 hours per day)
+            - Shows real power consumption patterns
+            - Useful for understanding consumption trends
+            
+            #### What is Price Data?
+            Price data represents the zonal electricity prices in Mexican Pesos per megawatt-hour (MXN/MWh).
+            - Includes total price (`precio_total`)
+            - Breakdown into components:
+              - Energy component (`componente_energia`)
+              - Losses component (`componente_perdidas`)
+              - Congestion component (`componente_congestion`)
+            - Shows market dynamics and price volatility
+            
+            #### Understanding Data Structure
+            Each record in your dataset represents:
+            - One hour of data for one zone
+            - Date and time information
+            - Demand value (MW)
+            - Price values (MXN/MWh) when available
+            
+            Data is automatically merged by zone, date, and hour. If price data is missing for a particular
+            hour/zone combination, price fields will show as `NaN`.
+            """)
+            
+            st.markdown("### 📈 Data Fields Reference")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("""
+                **Core Fields:**
+                - `sistema`: Electric system (SIN/BCA/BCS)
+                - `zona_carga`: Load zone name
+                - `fecha`: Date
+                - `hora`: Hour (1-24)
+                - `datetime`: Combined date and time
+                
+                **Demand Fields:**
+                - `demanda`: Demand in MW
+                """)
+            
+            with col2:
+                st.markdown("""
+                **Price Fields:**
+                - `precio_total`: Total zonal price (MXN/MWh)
+                - `componente_energia`: Energy component
+                - `componente_perdidas`: Losses component
+                - `componente_congestion`: Congestion component
+                
+                **Derived Fields:**
+                - `is_weekend`: Weekend flag
+                - `season`: Season classification
+                """)
         
-        **3. Data Fields:**
-        - `sistema`: Electric system (SIN/BCA/BCS)
-        - `zona_carga`: Load zone name
-        - `fecha`: Date
-        - `hora`: Hour (1-24)
-        - `demanda`: Demand in MW
-        - `precio_total`: Zonal price in MXN/MWh
-        - Additional `precio_*` columns for price components (when available)
-        - `datetime`: Combined date and time
+        with help_sections[2]:
+            st.markdown("### ⚙️ Technical Details")
+            
+            st.markdown("""
+            #### Electrical Systems
+            
+            **SIN** (Sistema Interconectado Nacional)
+            - Main national grid covering most of Mexico
+            - 100+ zones organized by Regional Controls
+            - Regional Controls: Central, Noreste, Noroeste, Norte, Occidental, Oriental, Peninsular
+            
+            **BCA** (Baja California)
+            - Isolated grid serving Baja California
+            - 4 zones: Ensenada, Mexicali, San Luis, Tijuana
+            
+            **BCS** (Baja California Sur)
+            - Isolated grid serving Baja California Sur
+            - 3 zones: Constitucion, La Paz, Los Cabos
+            
+            #### API Limitations
+            - **Maximum 7 days per request**: Automatically handled by chunking
+            - **Maximum 10 zones per request**: Enforced in the UI
+            - **Data delay**: 1-day delay in data availability
+            - **Dual API calls**: Each download requires calls to both SW-CAEZC (demand) and SW-PEND (price) APIs
+            
+            #### Caching Strategy
+            - Data cached for 24 hours
+            - Cache key based on: system + zones + date range + data type
+            - Demand and price data cached separately for efficiency
+            - Cache location: `~/.cenace_cache/`
+            
+            #### Data Quality
+            Check the Data Quality Indicators in the Dashboard to see:
+            - Records coverage percentage
+            - Demand data completeness
+            - Price data completeness
+            - Zones with complete data
+            """)
         
-        **4. Caching:**
-        - Data is cached for 24 hours to improve performance
-        - Cache is based on zones + date range
-        - Clear cache in Settings if you need fresh data
-        
-        **5. Best Practices:**
-        - Download data in weekly chunks for better performance
-        - Use the delay setting to avoid overwhelming the server
-        - For large date ranges, consider downloading by system
-        - Demand and price requests run together; allow extra time for large date ranges
-        
-        **6. Troubleshooting:**
-        - **SSL Errors**: Disable SSL verification in Advanced Options
-        - **Timeout Errors**: Increase retry attempts and delay
-        - **No Data**: Check if date range is too recent (1-day delay)
-        
-        ### 🔗 Resources
-        - [CENACE Official Website](https://www.cenace.gob.mx)
-        - [API Documentation](https://www.cenace.gob.mx/SIM/VISTA/REPORTES/DemandaZonaCarga.aspx)
-        
-        ### 📧 Support
-        For issues or questions, please check the documentation or contact support.
-        """)
+        with help_sections[3]:
+            st.markdown("### 🔧 Troubleshooting Guide")
+            
+            st.markdown("""
+            #### Common Issues and Solutions
+            
+            **SSL Certificate Errors**
+            - **Solution**: Disable SSL verification in Advanced Options
+            - CENACE's SSL certificate often has issues
+            - This is safe for data download purposes
+            
+            **Timeout Errors**
+            - Increase retry attempts (Advanced Options)
+            - Increase delay between requests
+            - Try smaller date ranges first
+            - Check your internet connection
+            
+            **No Data Returned**
+            - Check date range (must be at least 1 day in the past)
+            - Verify zone names are correct
+            - Ensure both APIs (SW-CAEZC and SW-PEND) are accessible
+            - Check internet connection
+            
+            **No Price Data**
+            - Price data may not be available for all zones/dates
+            - Check that SW-PEND API is responding correctly
+            - Verify date range (price data might have different availability)
+            - Some zones may not have price data for certain periods
+            
+            **Download Takes Too Long**
+            - Reduce number of zones (API limit: 10 zones max)
+            - Use smaller date ranges
+            - Increase delay between requests (slower but more reliable)
+            - Check network connection speed
+            
+            **Memory Issues**
+            - Download data in smaller chunks
+            - Clear cache periodically
+            - Restart the application
+            - Reduce date range or number of zones
+            """)
+            
+            st.markdown("### 🔗 Additional Resources")
+            st.markdown("""
+            - [CENACE Official Website](https://www.cenace.gob.mx)
+            - [CENACE Data Portal](https://www.cenace.gob.mx/SIM/VISTA/REPORTES/DemandaZonaCarga.aspx)
+            
+            For technical issues or questions, please refer to the project repository.
+            """)
 
 # Download logic
 if download_button:
@@ -1012,41 +1553,33 @@ if download_button:
             status_text.text("❌ Download failed")
             detail_text.text(str(e))
 
-# Show download complete message with a prominent refresh button (outside download handler)
-# This ensures the button persists even after reruns
+# Show download complete message with quick action buttons (outside download handler)
+# This ensures the buttons persist even after reruns
 if st.session_state.get('download_complete', False):
     df = st.session_state.get('download_data', None)
     if df is not None and not df.empty and 'fecha' in df.columns and 'zona_carga' in df.columns:
         st.markdown("---")
-        st.success(f"""
-        ✅ **Download Complete!**
-        - Records: {len(df):,}
-        - Zones: {len(df['zona_carga'].unique())}
-        - Includes hourly demand and zonal prices
-        - Date Range: {df['fecha'].min().date()} to {df['fecha'].max().date()}
-        """)
         
-        # Create a visually prominent section for the button
+        # Success message in prominent card
         st.markdown("""
-        <div style='text-align: center; padding: 20px; background-color: #e8f5e9; border-radius: 10px; margin: 20px 0; border: 2px solid #4caf50;'>
-            <h3 style='color: #2e7d32; margin-bottom: 10px;'>🎯 Your Data is Ready!</h3>
-            <p style='font-size: 16px; color: #388e3c; margin-bottom: 15px;'>Click the button below to view your data in the Dashboard</p>
+        <div style='background-color: #e8f5e9; padding: 24px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #4caf50;'>
+            <h2 style='color: #2e7d32; margin-top: 0; margin-bottom: 12px;'>✅ Download Complete!</h2>
+            <p style='color: #388e3c; font-size: 16px; margin-bottom: 8px;'><strong>{records:,}</strong> records downloaded</p>
+            <p style='color: #388e3c; font-size: 14px; margin-bottom: 0;'>
+                <strong>{zones}</strong> zones • <strong>{date_range}</strong> • Includes demand & price data
+            </p>
         </div>
-        """, unsafe_allow_html=True)
+        """.format(
+            records=len(df),
+            zones=len(df['zona_carga'].unique()),
+            date_range=f"{df['fecha'].min().date()} to {df['fecha'].max().date()}"
+        ), unsafe_allow_html=True)
         
-        # Large, prominent button in the main content area
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            view_button = st.button(
-                "📊 **View Data in Dashboard**", 
-                key="view_data_btn", 
-                use_container_width=True, 
-                type="primary"
-            )
-            if view_button:
-                # Scroll to top or switch tab - the data is already in session_state
-                # The button click will trigger a rerun and tabs will show the data
-                st.rerun()
+        # Quick action buttons
+        st.markdown("### 🚀 Quick Actions")
+        st.markdown("Choose where you'd like to go next:")
+        
+        render_quick_actions()
         
         st.markdown("---")
 
