@@ -12,8 +12,13 @@ from .zones import (
     get_regional_controls_for_system,
     get_zones_for_regional_control,
     get_regional_control_for_zone,
+    get_states_for_zone,
+    get_state_names_for_zone,
+    get_state_codes_for_zone,
+    get_primary_state_for_zone,
     ZONES_BY_SYSTEM,
-    ZONES_BY_SYSTEM_REGIONAL
+    ZONES_BY_SYSTEM_REGIONAL,
+    ZONE_TO_STATE_MAPPING
 )
 from .utils import estimate_download_time, format_file_size
 
@@ -28,8 +33,13 @@ __all__ = [
     'get_regional_controls_for_system',
     'get_zones_for_regional_control',
     'get_regional_control_for_zone',
+    'get_states_for_zone',
+    'get_state_names_for_zone',
+    'get_state_codes_for_zone',
+    'get_primary_state_for_zone',
     'ZONES_BY_SYSTEM',
     'ZONES_BY_SYSTEM_REGIONAL',
+    'ZONE_TO_STATE_MAPPING',
     'estimate_download_time',
     'format_file_size'
 ]

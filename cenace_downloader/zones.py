@@ -178,6 +178,211 @@ ZONE_NAME_MAPPINGS = {
     # Add more mappings as needed
 }
 
+# Zone to State mapping (Entidad Federativa)
+# Maps zone names to their corresponding federal entities (states)
+# Structure: zone_name -> list of (full_state_name, state_code) tuples
+# Some zones may span multiple states
+ZONE_TO_STATE_MAPPING = {
+    # BCA (Baja California)
+    "ENSENADA": [("BAJA CALIFORNIA", "BN")],
+    "MEXICALI": [("BAJA CALIFORNIA", "BN"), ("SONORA", "SO")],
+    "SANLUIS": [("BAJA CALIFORNIA", "BN")],
+    "TIJUANA": [("BAJA CALIFORNIA", "BN")],
+    
+    # BCS (Baja California Sur)
+    "CONSTITUCION": [("BAJA CALIFORNIA SUR", "BS")],
+    "LA PAZ": [("BAJA CALIFORNIA SUR", "BS")],
+    "LOS CABOS": [("BAJA CALIFORNIA SUR", "BS")],
+    
+    # SIN - Central
+    "CENTRO ORIENTE": [("HIDALGO", "HI")],
+    "CENTRO SUR": [("MORELOS", "MO")],
+    "LAZARO CARDENAS": [("MICHOACAN DE OCAMPO", "MC")],
+    "VDM CENTRO": [("CIUDAD DE MEXICO", "DF")],
+    "VDM NORTE": [("CIUDAD DE MEXICO", "DF"), ("ESTADO DE MEXICO", "MX")],
+    "VDM SUR": [("CIUDAD DE MEXICO", "DF"), ("ESTADO DE MEXICO", "MX")],
+    
+    # SIN - Noreste
+    "HUASTECA": [("HIDALGO", "HI"), ("SAN LUIS POTOSI", "SL"), ("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "HUEJUTLA": [("HIDALGO", "HI")],
+    "MATAMOROS": [("TAMAULIPAS", "TM")],
+    "MONCLOVA": [("COAHUILA DE ZARAGOZA", "CO")],
+    "MONTEMORELOS": [("NUEVO LEON", "NL")],
+    "MONTERREY": [("NUEVO LEON", "NL")],
+    "NUEVO LAREDO": [("TAMAULIPAS", "TM")],
+    "PIEDRAS NEGRAS": [("COAHUILA DE ZARAGOZA", "CO")],
+    "REYNOSA": [("TAMAULIPAS", "TM")],
+    "SABINAS": [("COAHUILA DE ZARAGOZA", "CO")],
+    "SALTILLO": [("COAHUILA DE ZARAGOZA", "CO")],
+    "TAMPICO": [("TAMAULIPAS", "TM")],
+    "VICTORIA": [("TAMAULIPAS", "TM")],
+    
+    # SIN - Noroeste
+    "CABORCA": [("SONORA", "SO")],
+    "CULIACAN": [("SINALOA", "SI")],
+    "GUASAVE": [("SINALOA", "SI")],
+    "GUAYMAS": [("SONORA", "SO")],
+    "HERMOSILLO": [("SONORA", "SO")],
+    "LOS MOCHIS": [("SINALOA", "SI")],
+    "MAZATLAN": [("SINALOA", "SI")],
+    "NAVOJOA": [("SONORA", "SO")],
+    "NOGALES": [("SONORA", "SO")],
+    "OBREGON": [("SONORA", "SO")],
+    
+    # SIN - Norte
+    "CAMARGO": [("CHIHUAHUA", "CH")],
+    "CASAS GRANDES": [("CHIHUAHUA", "CH")],
+    "CHIHUAHUA": [("CHIHUAHUA", "CH")],
+    "CUAUHTEMOC": [("CHIHUAHUA", "CH")],
+    "DURANGO": [("DURANGO", "DU")],
+    "JUAREZ": [("CHIHUAHUA", "CH")],
+    "LAGUNA": [("COAHUILA DE ZARAGOZA", "CO"), ("DURANGO", "DU")],
+    
+    # SIN - Occidental
+    "AGUASCALIENTES": [("AGUASCALIENTES", "AG")],
+    "APATZINGAN": [("MICHOACAN DE OCAMPO", "MC")],
+    "CELAYA": [("GUANAJUATO", "GT")],
+    "CIENEGA": [("GUANAJUATO", "GT")],
+    "COLIMA": [("COLIMA", "CL")],
+    "FRESNILLO": [("ZACATECAS", "ZA")],
+    "GUADALAJARA": [("JALISCO", "JA")],
+    "IRAPUATO": [("GUANAJUATO", "GT")],
+    "IXMIQUILPAN": [("HIDALGO", "HI")],
+    "JIQUILPAN": [("MICHOACAN DE OCAMPO", "MC")],
+    "LEON": [("GUANAJUATO", "GT")],
+    "LOS ALTOS": [("JALISCO", "JA")],
+    "MANZANILLO": [("COLIMA", "CL")],
+    "MATEHUALA": [("SAN LUIS POTOSI", "SL")],
+    "MINAS": [("GUANAJUATO", "GT")],
+    "MORELIA": [("MICHOACAN DE OCAMPO", "MC")],
+    "QUERETARO": [("QUERETARO", "QE")],
+    "SALVATIERRA": [("GUANAJUATO", "GT")],
+    "SAN JUAN DEL RIO": [("QUERETARO", "QE")],
+    "SAN LUIS POTOSI": [("SAN LUIS POTOSI", "SL")],
+    "TEPIC VALLARTA": [("NAYARIT", "NY")],
+    "URUAPAN": [("MICHOACAN DE OCAMPO", "MC")],
+    "ZACAPU": [("MICHOACAN DE OCAMPO", "MC")],
+    "ZACATECAS": [("ZACATECAS", "ZA")],
+    "ZAMORA": [("MICHOACAN DE OCAMPO", "MC")],
+    "ZAPOTLAN": [("JALISCO", "JA")],
+    
+    # SIN - Oriental
+    "ACAPULCO": [("GUERRERO", "GR")],
+    "CHILPANCINGO": [("GUERRERO", "GR")],
+    "CHONTALPA": [("TABASCO", "TB")],
+    "COATZACOALCOS": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "CORDOBA": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "CUAUTLA": [("MORELOS", "MO")],
+    "CUERNAVACA": [("MORELOS", "MO")],
+    "HUAJUAPAN": [("OAXACA", "OA")],
+    "HUATULCO": [("OAXACA", "OA")],
+    "IGUALA": [("GUERRERO", "GR")],
+    "IZUCAR": [("PUEBLA", "PU")],
+    "LOS RIOS": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "LOS TUXTLAS": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "MORELOS": [("MORELOS", "MO")],
+    "OAXACA": [("OAXACA", "OA")],
+    "ORIZABA": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "POZA RICA": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "PUEBLA": [("PUEBLA", "PU")],
+    "SAN CRISTOBAL": [("CHIAPAS", "CS")],
+    "SAN MARTIN": [("PUEBLA", "PU")],
+    "TAPACHULA": [("CHIAPAS", "CS")],
+    "TECAMACHALCO": [("PUEBLA", "PU")],
+    "TEHUACAN": [("PUEBLA", "PU")],
+    "TEHUANTEPEC": [("OAXACA", "OA")],
+    "TEZIUTLAN": [("PUEBLA", "PU")],
+    "TLAXCALA": [("TLAXCALA", "TL")],
+    "TUXTLA": [("CHIAPAS", "CS")],
+    "VERACRUZ": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "VILLAHERMOSA": [("TABASCO", "TB")],
+    "XALAPA": [("VERACRUZ DE IGNACIO DE LA LLAVE", "VE")],
+    "ZIHUATANEJO": [("GUERRERO", "GR")],
+    
+    # SIN - Peninsular
+    "CAMPECHE": [("CAMPECHE", "CM")],
+    "CANCUN": [("QUINTANA ROO", "QR")],
+    "CARMEN": [("CAMPECHE", "CM")],
+    "CHETUMAL": [("QUINTANA ROO", "QR")],
+    "MERIDA": [("YUCATAN", "YU")],
+    "MOTUL TIZIMIN": [("YUCATAN", "YU")],
+    "RIVIERA MAYA": [("QUINTANA ROO", "QR")],
+    "TICUL": [("YUCATAN", "YU")],
+}
+
+
+def get_states_for_zone(zone_name: str) -> list:
+    """
+    Get the federal entities (states) associated with a zone
+    
+    Parameters:
+    -----------
+    zone_name : str
+        Zone name (will be normalized)
+    
+    Returns:
+    --------
+    list : List of tuples (full_state_name, state_code) for the zone.
+           Returns empty list if zone not found.
+           Some zones may span multiple states.
+    """
+    normalized = normalize_zone_name(zone_name)
+    return ZONE_TO_STATE_MAPPING.get(normalized, [])
+
+
+def get_state_names_for_zone(zone_name: str) -> list:
+    """
+    Get the full state names (Entidad Federativa) for a zone
+    
+    Parameters:
+    -----------
+    zone_name : str
+        Zone name (will be normalized)
+    
+    Returns:
+    --------
+    list : List of full state names. Returns empty list if zone not found.
+    """
+    states = get_states_for_zone(zone_name)
+    return [state[0] for state in states]
+
+
+def get_state_codes_for_zone(zone_name: str) -> list:
+    """
+    Get the two-letter state codes for a zone
+    
+    Parameters:
+    -----------
+    zone_name : str
+        Zone name (will be normalized)
+    
+    Returns:
+    --------
+    list : List of two-letter state codes. Returns empty list if zone not found.
+    """
+    states = get_states_for_zone(zone_name)
+    return [state[1] for state in states]
+
+
+def get_primary_state_for_zone(zone_name: str) -> tuple:
+    """
+    Get the primary state (first state) for a zone
+    
+    Parameters:
+    -----------
+    zone_name : str
+        Zone name (will be normalized)
+    
+    Returns:
+    --------
+    tuple : (full_state_name, state_code) or ("", "") if zone not found.
+            Returns the first state if zone spans multiple states.
+    """
+    states = get_states_for_zone(zone_name)
+    if states:
+        return states[0]
+    return ("", "")
+
 
 def get_all_zones():
     """
