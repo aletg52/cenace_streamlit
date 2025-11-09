@@ -64,7 +64,7 @@ streamlit run app_streamlit.py --server.port 8080
 
 ### Step 2: Choose Date Range
 1. Use preset options (Last 7/30 days, Current Month)
-2. Or select custom dates (max 1 year range)
+2. Or select custom dates (no limit)
 3. Note: CENACE data has a 1-day delay
 
 ### Step 3: Configure Settings (Optional)

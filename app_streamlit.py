@@ -267,11 +267,8 @@ with st.sidebar:
                 max_value=today - timedelta(days=1)
             )
     
-    # Validate date range (max 1 year)
+    # Calculate date range
     date_diff = (end_date - start_date).days
-    if date_diff > 365:
-        st.error("⚠️ Maximum date range is 1 year")
-        start_date = end_date - timedelta(days=365)
     
     st.info(f"📅 Selected: {start_date} to {end_date} ({date_diff + 1} days)")
     
@@ -401,7 +398,7 @@ with main_container:
                 <div style='background-color: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 16px; height: 100%;'>
                     <h4 style='margin-top: 0; color: #374151; font-size: 16px;'>2️⃣ Choose Date Range</h4>
                     <p style='color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 0;'>
-                        Use presets (Last 7/30 days) or select custom dates. Maximum 1 year range. Data has 1-day delay.
+                        Use presets (Last 7/30 days) or select custom dates. Data has 1-day delay.
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1170,7 +1167,7 @@ with main_container:
             
             **Step 2: Choose Date Range**
             - Use presets: Last 7 Days, Last 30 Days, Current Month
-            - Or select custom dates (max 1 year)
+            - Or select custom dates (no limit)
             - Remember: CENACE data has a 1-day delay
             
             **Step 3: Download Data**
