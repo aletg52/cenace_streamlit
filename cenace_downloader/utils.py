@@ -170,7 +170,7 @@ def generate_cache_key(params: Dict) -> str:
 
 
 def validate_date_range(start_date: datetime.date, end_date: datetime.date,
-                       max_days: int = 365) -> Tuple[bool, str]:
+                       max_days: Optional[int] = None) -> Tuple[bool, str]:
     """
     Validate a date range
     
@@ -180,8 +180,8 @@ def validate_date_range(start_date: datetime.date, end_date: datetime.date,
         Start date
     end_date : datetime.date
         End date
-    max_days : int
-        Maximum allowed days in range
+    max_days : int, optional
+        Maximum allowed days in range (None for no limit)
     
     Returns:
     --------
@@ -191,10 +191,11 @@ def validate_date_range(start_date: datetime.date, end_date: datetime.date,
     if start_date > end_date:
         return False, "Start date must be before end date"
     
-    # Check date range is not too long
-    days_diff = (end_date - start_date).days + 1
-    if days_diff > max_days:
-        return False, f"Date range exceeds maximum of {max_days} days"
+    # Check date range is not too long (if max_days is specified)
+    if max_days is not None:
+        days_diff = (end_date - start_date).days + 1
+        if days_diff > max_days:
+            return False, f"Date range exceeds maximum of {max_days} days"
     
     # Check dates are not in the future
     today = datetime.now().date()
